@@ -1,0 +1,162 @@
+/* ── Design tokens ───────────────────────────────────────────────────────── */
+:root {
+  /* surfaces */
+  --bg-base:        #0f1117;
+  --bg-surface:     #181c27;
+  --bg-elevated:    #1e2333;
+  --bg-hover:       #252b3b;
+
+  /* borders */
+  --border:         #2a3047;
+  --border-focus:   #4a7cf6;
+
+  /* text */
+  --text-primary:   #e8eaf0;
+  --text-secondary: #8b93a8;
+  --text-muted:     #545e75;
+
+  /* accents */
+  --accent:         #4a7cf6;
+  --accent-hover:   #6594f8;
+  --accent-danger:  #e05c5c;
+  --accent-success: #3dba7e;
+  --accent-warning: #e0a33d;
+
+  /* graph canvas */
+  --canvas-bg:      #0c0e15;
+
+  /* sidebar */
+  --sidebar-width:  240px;
+  --topbar-height:  42px;
+
+  /* typography */
+  --font-sans:      -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono:      "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+  --font-size-xs:   11px;
+  --font-size-sm:   12px;
+  --font-size-base: 13px;
+
+  /* radius */
+  --radius-sm:  4px;
+  --radius-md:  6px;
+  --radius-lg:  10px;
+
+  /* shadow */
+  --shadow-sm:  0 1px 3px rgba(0,0,0,.4);
+  --shadow-md:  0 4px 12px rgba(0,0,0,.5);
+
+  /* Cytoscape node backgrounds (per entity type) */
+  --cyto-ip-bg:         #0e1e38;
+  --cyto-domain-bg:     #0e2518;
+  --cyto-email-bg:      #1f1028;
+  --cyto-person-bg:     #261808;
+  --cyto-url-bg:        #0f2218;
+  --cyto-org-bg:        #191428;
+  --cyto-hash-bg:       #201c10;
+  --cyto-location-bg:   #0e2020;
+  --cyto-ipv6-bg:       #0c1e3a;
+  --cyto-vt-bg:         #2a0e0e;
+  --cyto-phone-bg:      #2a1a2e;
+  --cyto-crypto-bg:     #2e2511;
+  --cyto-social-bg:     #111c30;
+  --cyto-image-bg:      #21161d;
+  --cyto-collection-bg: #1a1a1a;
+
+  /* Cytoscape node border tints (per entity type) */
+  --cyto-ip-border:     #4a7cf6;
+  --cyto-domain-border: #3dba7e;
+  --cyto-email-border:  #a855f7;
+  --cyto-person-border: #f59e0b;
+  --cyto-url-border:    #22c55e;
+  --cyto-org-border:    #8b5cf6;
+  --cyto-hash-border:   #eab308;
+  --cyto-location-border: #14b8a6;
+  --cyto-ipv6-border:     #60a5fa;
+  --cyto-vt-border:       #ef4444;
+  --cyto-phone-border:  #d946ef;
+  --cyto-crypto-border: #f59e0b;
+  --cyto-social-border: #3b82f6;
+  --cyto-image-border:  #ec4899;
+  --cyto-collection-border: #4a7cf6;
+
+  /* Cytoscape canvas / edge defaults */
+  --cyto-edge-line:     #2a3047;
+  --cyto-edge-arrow:    #4a7cf6;
+  --cyto-ghost:         rgba(74,124,246,.18);
+  --cyto-selected-border: #6594f8;
+  --cyto-selected-bg:   rgba(74,124,246,.22);
+}
+
+/* light theme override */
+[data-theme="light"] {
+  --bg-base:        #f0f2f5;
+  --bg-surface:     #ffffff;
+  --bg-elevated:    #f7f8fa;
+  --bg-hover:       #ebedf1;
+
+  --border:         #d0d5e0;
+  --border-focus:   #3a6ae0;
+
+  --text-primary:   #111827;
+  --text-secondary: #4b5568;
+  --text-muted:     #9ca3af;
+
+  --accent:         #3a6ae0;
+  --accent-hover:   #2d5bc4;
+  --accent-danger:  #c53030;
+  --accent-success: #2f9e6a;
+  --accent-warning: #b7791f;
+
+  --canvas-bg:      #e8ebf0;
+
+  /* Cytoscape node backgrounds (light overrides) */
+  --cyto-ip-bg:         #dbeafe;
+  --cyto-domain-bg:     #d1fae5;
+  --cyto-email-bg:      #ede9fe;
+  --cyto-person-bg:     #fef3c7;
+  --cyto-url-bg:        #dcfce7;
+  --cyto-org-bg:        #f3e8ff;
+  --cyto-hash-bg:       #fef9c3;
+  --cyto-location-bg:   #ccfbf1;
+  --cyto-ipv6-bg:       #dbeafe;
+  --cyto-vt-bg:         #fee2e2;
+  --cyto-phone-bg:      #fae8ff;
+  --cyto-crypto-bg:     #fef3c7;
+  --cyto-social-bg:     #dbeafe;
+  --cyto-image-bg:      #fce7f3;
+  --cyto-collection-bg: #f3f4f6;
+
+  /* Cytoscape edge defaults (light) */
+  --cyto-edge-line:     #9ca3af;
+  --cyto-edge-arrow:    #3a6ae0;
+  --cyto-ghost:         rgba(58,106,224,.15);
+  --cyto-selected-border: #2d5bc4;
+  --cyto-selected-bg:   rgba(58,106,224,.18);
+}
+
+/* ── Reset ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  background: var(--bg-base);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Utility ──────────────────────────────────────────────────────────────── */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border-width: 0;
+}

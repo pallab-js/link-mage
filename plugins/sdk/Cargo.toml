@@ -1,0 +1,16 @@
+[package]
+name    = "link-mage-plugin-sdk"
+version = "0.2.0"
+edition = "2021"
+description = "SDK for writing Link Mage external transform plugins"
+license = "MIT"
+# Publish this to crates.io so plugin authors can depend on it:
+#   cargo add link-mage-plugin-sdk
+# or keep it as a path dependency during development:
+#   link-mage-plugin-sdk = { path = "../sdk" }
+
+[dependencies]
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+# No extra crates needed — OnceLock (std::sync::OnceLock, stable since Rust 1.70)
+# is used for lazy statics inside the declare_plugin! macro.

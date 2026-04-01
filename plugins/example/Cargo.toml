@@ -1,0 +1,14 @@
+[package]
+name        = "lm-plugin-reverse-dns"
+version     = "0.2.0"
+edition     = "2021"
+description = "Link Mage plugin: reverse-DNS PTR lookup for IP nodes"
+license     = "MIT"
+
+# cdylib is REQUIRED — it tells the linker to produce a shared library
+# (.dylib on macOS, .so on Linux, .dll on Windows).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+link-mage-plugin-sdk = { path = "../sdk" }
