@@ -32,7 +32,6 @@ vite.config.ts.timestamp-*
 # Rust
 src-tauri/target/
 **/*.rs.bk
-Cargo.lock
 
 # Tauri
 src-tauri/icons/app.icns
