@@ -13,7 +13,6 @@
   } from '$lib/stores';
   import type { Node, Edge } from '$lib/stores';
   import { NODE_TYPES, type NodeType } from '$lib/nodeTypes';
-  import ThemeToggle from './ThemeToggle.svelte';
   import { newGraph, saveGraph, loadGraph, basename } from '$lib/graphActions';
   import FilterPanel from './FilterPanel.svelte';
   import ProvenancePanel from './ProvenancePanel.svelte';
@@ -373,13 +372,6 @@
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <aside class="sidebar">
-
-  <!-- ── Header ──────────────────────────────────────────────────────────── -->
-  <div class="sidebar-header">
-    <span class="logo-mark">⬡</span>
-    <span class="app-name">Link Mage</span>
-    <ThemeToggle />
-  </div>
 
   <!-- ── View / layout ───────────────────────────────────────────────────── -->
   <section class="sidebar-section">
@@ -896,20 +888,6 @@
     overflow-x: hidden;
     flex-shrink: 0;
   }
-
-  /* ── Header ────────────────────────────────────────────────────────────── */
-  .sidebar-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 12px;
-    height: var(--topbar-height);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .logo-mark { font-size: 17px; color: var(--accent); line-height: 1; }
-  .app-name  { font-size: 13px; font-weight: 700; color: var(--text-primary); flex: 1; letter-spacing: -.01em; }
 
   /* ── Section chrome ────────────────────────────────────────────────────── */
   .sidebar-section {
