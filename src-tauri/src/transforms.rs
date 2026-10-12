@@ -29,7 +29,6 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use crate::provenance::{Provenance, ProvenanceSource, ProvenanceTracker};
 use std::sync::Mutex;
 
 use log::{debug, info, warn};
@@ -81,12 +80,12 @@ impl MachineRegistry {
                 Machine {
                     name: "Domain Footprint".into(),
                     description: "Runs DNS Lookup, WHOIS, and Web Scraping in sequence.".into(),
-                    transforms: vec!["DNS Lookup".into(), "WHOIS Lookup".into(), "Scrape Webpage".into()],
+                    transforms: vec!["DNS Lookup".into(), "WHOIS".into(), "Scrape Webpage".into()],
                 },
                 Machine {
                     name: "IP Intel".into(),
-                    description: "Runs GeoIP, WHOIS, and VirusTotal Report in sequence.".into(),
-                    transforms: vec!["GeoIP Lookup".into(), "WHOIS Lookup".into(), "VirusTotal Report".into()],
+                    description: "Runs GeoIP, WHOIS, and VirusTotal Lookup in sequence.".into(),
+                    transforms: vec!["GeoIP Lookup".into(), "WHOIS".into(), "VirusTotal Lookup".into()],
                 }
             ],
         }
@@ -156,25 +155,6 @@ impl Default for TransformRegistry {
     }
 }
 
-// Kept for backwards-compatibility with unit tests.
-#[doc(hidden)]
-pub fn registry() -> Vec<Box<dyn Transform>> {
-    vec![
-        Box::new(DnsLookupTransform),
-        Box::new(WhoisTransform),
-        Box::new(GeoIpTransform::new()),
-        Box::new(ScrapeWebpageTransform::new()),
-        Box::new(VirusTotalTransform::new()),
-    ]
-}
-
-#[doc(hidden)]
-pub fn find(name: &str) -> Option<Box<dyn Transform>> {
-    registry()
-        .into_iter()
-        .find(|t| t.name().to_lowercase() == name.to_lowercase())
-}
-
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
 /// Return the `value` property of a node, falling back to the node id.
@@ -212,33 +192,6 @@ where
     let id = base.id.clone();
     let node = Node { properties: props, ..base };
     let edge = Edge::new(source_id, &id, edge_label);
-
-    (node, edge)
-}
-
-/// Create a node with provenance tracking
-fn create_result_node_with_provenance<I, K, V>(
-    source_id: &str,
-    node_type: &str,
-    value: &str,
-    extra: I,
-    edge_label: &str,
-    provenance: Provenance,
-) -> (Node, Edge)
-where
-    I: IntoIterator<Item = (K, V)>,
-    K: Into<String>,
-    V: Into<String>,
-{
-    let mut props: HashMap<String, String> = extra
-        .into_iter()
-        .map(|(k, v)| (k.into(), v.into()))
-        .collect();
-    props.insert("value".into(), value.to_string());
-    props.insert("label".into(), value.to_string());
-
-    let node = Node::with_provenance(node_type, provenance);
-    let edge = Edge::new(source_id, &node.id, edge_label);
 
     (node, edge)
 }
@@ -491,7 +444,12 @@ impl Transform for WhoisTransform {
             )),
         }
 
-        let target = node_value(&seed).to_string();
+        // The query is written raw to the WHOIS TCP socket, so CR/LF would
+        // inject extra commands — reject them outright.
+        let target = node_value(&seed).trim().to_string();
+        if target.is_empty() || target.contains(['\r', '\n']) {
+            return Err(format!("WHOIS query rejected: {target:?} contains control characters"));
+        }
         info!("[WHOIS] Querying '{}'", target);
 
         // Step 1: query IANA for authoritative server / referral.
@@ -869,22 +827,24 @@ mod tests {
 
     #[test]
     fn registry_contains_five_transforms() {
-        assert_eq!(registry().len(), 5);
+        assert_eq!(TransformRegistry::new().all().len(), 5);
     }
 
     #[test]
     fn registry_names_are_unique() {
-        let names: Vec<_> = registry().iter().map(|t| t.name()).collect();
+        let reg = TransformRegistry::new();
+        let names: Vec<_> = reg.all().iter().map(|t| t.name()).collect();
         let unique: std::collections::HashSet<_> = names.iter().collect();
         assert_eq!(names.len(), unique.len(), "duplicate transform names");
     }
 
     #[test]
     fn find_by_name_case_insensitive() {
-        assert!(find("dns lookup").is_some());
-        assert!(find("DNS LOOKUP").is_some());
-        assert!(find("virustotal lookup").is_some());
-        assert!(find("nonexistent").is_none());
+        let reg = TransformRegistry::new();
+        assert!(reg.find("dns lookup").is_some());
+        assert!(reg.find("DNS LOOKUP").is_some());
+        assert!(reg.find("virustotal lookup").is_some());
+        assert!(reg.find("nonexistent").is_none());
     }
 
     // ── create_result_node ─────────────────────────────────────────────────
@@ -1040,6 +1000,15 @@ mod tests {
         let mut node = Node::new("Email");
         node.properties.insert("value".into(), "a@b.com".into());
         assert!(WhoisTransform.run(&node).is_err());
+    }
+
+    #[test]
+    fn whois_rejects_control_characters_in_query() {
+        // CRLF would inject extra commands into the raw WHOIS TCP session.
+        let mut node = Node::new("Domain");
+        node.properties.insert("value".into(), "example.com\r\nQUIT".into());
+        let err = WhoisTransform.run(&node).unwrap_err();
+        assert!(err.contains("control characters"), "{err}");
     }
 
     // ── WHOIS integration (requires network) ─────────────────────────────
@@ -1233,7 +1202,7 @@ mod tests {
 
     #[test]
     fn all_transforms_have_non_empty_name_and_description() {
-        for t in registry() {
+        for t in TransformRegistry::new().all() {
             assert!(!t.name().is_empty(),
                 "transform name must not be empty");
             assert!(!t.description().is_empty(),
@@ -1587,14 +1556,13 @@ impl VirusTotalTransform {
     }
 
     /// Build the VirusTotal API URL for the given node type + value.
+    /// Build the API URL for a node. The value is pushed through
+    /// `path_segments_mut`, which percent-encodes it — a crafted value
+    /// containing `/`, `?` or `#` cannot rewrite the request path.
     fn api_url(node_type: &str, value: &str) -> Result<String, String> {
-        match node_type {
-            "Domain" => Ok(format!(
-                "https://www.virustotal.com/api/v3/domains/{value}"
-            )),
-            "IP" | "IPv6" => Ok(format!(
-                "https://www.virustotal.com/api/v3/ip_addresses/{value}"
-            )),
+        let (segment, value) = match node_type {
+            "Domain" => ("domains", value),
+            "IP" | "IPv6" => ("ip_addresses", value),
             "URL" => {
                 // The VT /urls/{id} endpoint requires a URL-safe base64-encoded
                 // SHA-256 of the URL, which would need a crypto dependency.
@@ -1606,15 +1574,24 @@ impl VirusTotalTransform {
                     .split('/')
                     .next()
                     .unwrap_or(value);
-                Ok(format!(
-                    "https://www.virustotal.com/api/v3/domains/{domain}"
-                ))
+                ("domains", domain)
             }
-            t => Err(format!(
+            t => return Err(format!(
                 "VirusTotal does not support node type '{t}'. \
                  Supported: Domain, IP, IPv6, URL."
             )),
+        };
+
+        let mut url = reqwest::Url::parse("https://www.virustotal.com/api/v3")
+            .map_err(|e| format!("bad VirusTotal base URL: {e}"))?;
+        {
+            let mut segs = url
+                .path_segments_mut()
+                .map_err(|_| "VirusTotal URL cannot be a base".to_string())?;
+            segs.push(segment);
+            segs.push(value);
         }
+        Ok(url.to_string())
     }
 }
 
@@ -1817,6 +1794,21 @@ mod virustotal_tests {
     }
 
     #[test]
+    fn vt_api_url_percent_encodes_path_injection() {
+        let url = VirusTotalTransform::api_url(
+            "Domain",
+            "evil.com/../../x?y=1#z",
+        ).unwrap();
+        // The crafted value must stay a single, encoded path segment —
+        // `/`, `?` and `#` are percent-encoded so they cannot rewrite the
+        // request path (`=` is a legal pchar and stays raw).
+        assert!(url.starts_with("https://www.virustotal.com/api/v3/domains/"), "{url}");
+        assert!(url.contains("evil.com%2F..%2F..%2Fx%3Fy=1%23z"), "{url}");
+        assert!(!url.contains('?'), "query must be encoded: {url}");
+        assert!(!url.contains('#'), "fragment must be encoded: {url}");
+    }
+
+    #[test]
     fn vt_no_api_key_returns_descriptive_error() {
         // When no key is configured, run() must return Err before touching
         // the network.  We fabricate a Domain node and expect the "not
@@ -1868,5 +1860,27 @@ mod virustotal_tests {
         let result = rl.acquire();
         assert!(result.is_err(), "should reject when wait > max_wait");
         assert!(result.unwrap_err().to_lowercase().contains("wait"));
+    }
+}
+
+#[cfg(test)]
+mod machine_tests {
+    use super::*;
+
+    /// Regression test: every step of every Machine must resolve to a real
+    /// transform. Name drift here used to make machines silently skip steps.
+    #[test]
+    fn machine_steps_resolve() {
+        let registry = TransformRegistry::new();
+        for machine in &registry.machines.machines {
+            for step in &machine.transforms {
+                assert!(
+                    registry.find(step).is_some(),
+                    "machine '{}' references unknown transform '{}'",
+                    machine.name,
+                    step
+                );
+            }
+        }
     }
 }

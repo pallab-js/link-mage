@@ -84,7 +84,8 @@ pub const API_VERSION: u32 = 2;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Node {
     pub id:          String,
-    #[serde(rename = "node_type")]
+    /// Serialized as `"type"` to match the host's `graph::Node`.
+    #[serde(rename = "type")]
     pub node_type:   String,
     pub properties:  std::collections::HashMap<String, String>,
 }

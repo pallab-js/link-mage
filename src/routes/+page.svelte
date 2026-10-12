@@ -2,16 +2,19 @@
   import Sidebar from '$lib/components/Sidebar.svelte';
   import Graph from '$lib/components/Graph.svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
+  import { sidebarOpenStore } from '$lib/stores';
 
   let graphRef: Graph | null = $state(null);
 </script>
 
-<Sidebar
-  onFit={()    => graphRef?.fit()}
-  onLayout={()  => graphRef?.runLayout()}
-  onZoomIn={()  => graphRef?.zoomIn()}
-  onZoomOut={()  => graphRef?.zoomOut()}
-/>
+{#if $sidebarOpenStore}
+  <Sidebar
+    onFit={()    => graphRef?.fit()}
+    onLayout={()  => graphRef?.runLayout()}
+    onZoomIn={()  => graphRef?.zoomIn()}
+    onZoomOut={()  => graphRef?.zoomOut()}
+  />
+{/if}
 
 <main class="canvas-area">
   <Graph bind:this={graphRef} />

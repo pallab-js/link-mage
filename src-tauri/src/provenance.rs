@@ -5,10 +5,10 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Represents a single step in the transform chain
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransformStep {
     /// Name of the transform that was applied
     pub transform_name: String,
@@ -66,11 +66,11 @@ impl From<&str> for ProvenanceSource {
     fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "manual" => ProvenanceSource::Manual,
-            "dns_lookup" | "dns" => ProvenanceSource::DnsLookup,
+            "dns_lookup" | "dns" | "dns lookup" => ProvenanceSource::DnsLookup,
             "whois_lookup" | "whois" => ProvenanceSource::WhoisLookup,
-            "geoip_lookup" | "geoip" => ProvenanceSource::GeoipLookup,
-            "web_scrape" | "scrape" => ProvenanceSource::WebScrape,
-            "virustotal" | "vt" => ProvenanceSource::Virustotal,
+            "geoip_lookup" | "geoip" | "geoip lookup" => ProvenanceSource::GeoipLookup,
+            "web_scrape" | "scrape" | "scrape webpage" => ProvenanceSource::WebScrape,
+            "virustotal" | "vt" | "virustotal lookup" => ProvenanceSource::Virustotal,
             "remote_transform" | "remote" => ProvenanceSource::RemoteTransform,
             "plugin" => ProvenanceSource::Plugin,
             "import" => ProvenanceSource::Import,
@@ -82,6 +82,7 @@ impl From<&str> for ProvenanceSource {
 
 /// Provenance metadata for an entity
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Provenance {
     /// Original source of this entity
     pub source: ProvenanceSource,
@@ -439,5 +440,31 @@ mod tests {
         let merged = Provenance::merge(&[prov1, prov2]);
         assert!(merged.transform_chain.len() >= 1);
         assert_eq!(merged.notes, Some("Merged from 2 sources".to_string()));
+    }
+
+    /// The frontend mirrors this struct in camelCase
+    /// (`src/lib/types/provenance.ts`); serde must agree or the provenance
+    /// panel reads `undefined` everywhere.
+    #[test]
+    fn provenance_serializes_camel_case_for_frontend() {
+        let json = serde_json::to_value(Provenance::manual("tester")).unwrap();
+        assert!(json.get("createdAt").is_some(), "expected camelCase createdAt: {json}");
+        assert!(json.get("createdBy").is_some());
+        assert!(json.get("transformChain").is_some());
+        assert!(json.get("created_at").is_none());
+
+        let step = TransformStep {
+            transform_name: "DNS Lookup".into(),
+            executed_at: "2026-01-01T00:00:00Z".into(),
+            source_node_id: "n1".into(),
+            duration_ms: Some(10),
+            success: true,
+            error: None,
+        };
+        let json = serde_json::to_value(&step).unwrap();
+        assert!(json.get("transformName").is_some());
+        assert!(json.get("sourceNodeId").is_some());
+        assert!(json.get("durationMs").is_some());
+        assert!(json.get("transform_name").is_none());
     }
 }

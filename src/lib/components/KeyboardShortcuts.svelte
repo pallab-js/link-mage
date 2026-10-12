@@ -2,8 +2,9 @@
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import { get } from 'svelte/store';
-  import { selectionStore } from '$lib/stores';
+  import { selectionStore, settingsOpenStore, sidebarOpenStore } from '$lib/stores';
   import { newGraph, saveGraph, saveGraphAs, loadGraph, deleteSelected } from '$lib/graphActions';
+  import { resetFilters } from '$lib/filterStore';
   import ShortcutHelp from './ShortcutHelp.svelte';
 
   // ── Props ─────────────────────────────────────────────────────────────────
@@ -137,27 +138,11 @@
       return;
     }
 
-    // ── Ctrl+D — duplicate selected node ──────────────────────────────────
-    if (mod && e.key === 'd') {
-      e.preventDefault();
-      flash(`${M}D`, 'Duplicate');
-      // Future: implement duplicate functionality
-      return;
-    }
-
-    // ── Ctrl+G — group selected nodes ─────────────────────────────────────
-    if (mod && e.key === 'g') {
-      e.preventDefault();
-      flash(`${M}G`, 'Group');
-      // Future: implement collapse to collection
-      return;
-    }
-
     // ── Ctrl+Shift+F — clear filters ──────────────────────────────────────
     if (mod && e.shiftKey && e.key === 'F') {
       e.preventDefault();
       flash(`${M}⇧F`, 'Clear Filters');
-      window.dispatchEvent(new CustomEvent('graph-filters-clear'));
+      resetFilters();
       return;
     }
 
@@ -169,9 +154,29 @@
       return;
     }
 
-    // ── Escape — deselect all ─────────────────────────────────────────────
+    // ── Ctrl+B — toggle sidebar ───────────────────────────────────────────
+    if (mod && e.key === 'b') {
+      e.preventDefault();
+      sidebarOpenStore.update(v => !v);
+      flash(`${M}B`, 'Toggle Sidebar');
+      return;
+    }
+
+    // ── Ctrl+, — settings ─────────────────────────────────────────────────
+    if (mod && e.key === ',') {
+      e.preventDefault();
+      settingsOpenStore.update(v => !v);
+      flash(`${M},`, 'Settings');
+      return;
+    }
+
+    // ── Escape — close help, else deselect all ────────────────────────────
     if (e.key === 'Escape') {
       e.preventDefault();
+      if (showHelp) {
+        showHelp = false;
+        return;
+      }
       flash('Esc', 'Deselect');
       window.dispatchEvent(new CustomEvent('graph-deselect-all'));
       return;
@@ -215,14 +220,14 @@
   </div>
 {/if}
 
-<!-- ── Help hint (always visible, bottom-left) ───────────────────────────── -->
-<div class="shortcut-hint" aria-hidden="true" onclick={toggleHelp} style="cursor: pointer" title="Click for keyboard shortcuts">
+<!-- ── Help hint (always visible, bottom-right) ──────────────────────────── -->
+<button class="shortcut-hint" onclick={toggleHelp} title="Keyboard shortcuts (?)">
   {#if isMac}
-    ⌘N · ⌘O · ⌘S · ⌘F · ⌘L · ⌘G · ⌘A · ⌫ · Esc · ?
+    ⌘N · ⌘O · ⌘S · ⌘F · ⌘⇧F · ⌘B · ⌘, · ?
   {:else}
-    Ctrl+N · Ctrl+O · Ctrl+S · Ctrl+F · Ctrl+L · Ctrl+G · Ctrl+A · Del · Esc · ?
+    Ctrl+N · Ctrl+O · Ctrl+S · Ctrl+F · Ctrl+Shift+F · Ctrl+B · Ctrl+, · ?
   {/if}
-</div>
+</button>
 
 <!-- Keyboard shortcuts help modal -->
 <ShortcutHelp open={showHelp} onClose={() => showHelp = false} />
@@ -271,8 +276,15 @@
     z-index: 100;
     font-size: 10px;
     color: var(--text-muted);
-    pointer-events: none;
+    background: transparent;
+    border: none;
+    padding: 2px 4px;
+    cursor: pointer;
+    font-family: inherit;
     user-select: none;
     letter-spacing: .03em;
+  }
+  .shortcut-hint:hover {
+    color: var(--text-secondary);
   }
 </style>

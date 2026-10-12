@@ -71,61 +71,52 @@ export const filteredGraph = derived(
 
     const filteredNodes = $graph.nodes.filter((node: Node) => {
       const degree = degrees.get(node.id) || 0;
-      
-      // Build match flags
-      let matches = true;
 
-      // Filter by type
+      // Every active criterion must pass (AND-ed); invertMode shows the
+      // complement (nodes that fail at least one criterion).
+      let pass = true;
+
       if (nodeTypes.length > 0) {
-        const matchesType = nodeTypes.includes(node.type);
-        matches = invertMode ? matchesType : !matchesType;
+        pass = pass && nodeTypes.includes(node.type);
       }
 
-      // Filter by degree
       if (degree < minDegree || degree > maxDegree) {
-        matches = invertMode;
+        pass = false;
       }
 
-      // Hide isolated nodes
       if (hideIsolated && degree === 0) {
-        matches = invertMode;
+        pass = false;
       }
 
-      // Filter by search query
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        const matchesType = node.type.toLowerCase().includes(q);
-        const matchesLabel = (node.properties['label'] || '').toLowerCase().includes(q);
-        const matchesValue = (node.properties['value'] || '').toLowerCase().includes(q);
-        const matchesAnyProp = Object.values(node.properties).some(v => 
-          v.toLowerCase().includes(q)
-        );
-        const matchesSearch = matchesType || matchesLabel || matchesValue || matchesAnyProp;
-        matches = invertMode ? matchesSearch : matchesSearch;
+        const matchesSearch =
+          node.type.toLowerCase().includes(q) ||
+          (node.properties['label'] || '').toLowerCase().includes(q) ||
+          (node.properties['value'] || '').toLowerCase().includes(q) ||
+          Object.values(node.properties).some(v => v.toLowerCase().includes(q));
+        pass = pass && matchesSearch;
       }
 
-      // Filter by provenance source
-      if (provenanceSources.length > 0 && node.provenance) {
-        const matchesSource = provenanceSources.includes(node.provenance.source);
-        matches = matches && (invertMode ? matchesSource : !matchesSource);
+      // Provenance-source filter: nodes without provenance count as
+      // 'unknown', so they only appear when 'unknown' is selected.
+      if (provenanceSources.length > 0) {
+        const source = node.provenance?.source ?? 'unknown';
+        pass = pass && provenanceSources.includes(source);
       }
 
-      // Filter by confidence
       if (minConfidence > 0 && node.provenance) {
-        const matchesConfidence = node.provenance.confidence * 100 >= minConfidence;
-        matches = matches && (invertMode ? matchesConfidence : !matchesConfidence);
+        pass = pass && node.provenance.confidence * 100 >= minConfidence;
       }
 
-      // Filter by date range
       if ((dateFrom || dateTo) && node.provenance) {
         const nodeDate = new Date(node.provenance.createdAt).getTime();
         const from = dateFrom ? new Date(dateFrom).getTime() : 0;
         const to = dateTo ? new Date(dateTo).getTime() : Date.now();
-        const matchesDate = nodeDate >= from && nodeDate <= to;
-        matches = matches && (invertMode ? matchesDate : !matchesDate);
+        pass = pass && nodeDate >= from && nodeDate <= to;
       }
 
-      return matches;
+      return invertMode ? !pass : pass;
     });
 
     // Filter edges to only include those connecting visible nodes

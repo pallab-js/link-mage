@@ -39,12 +39,8 @@
     );
   }
 
-  /** All machines (automation sequences). */
-  function machinesFor(_nodeType: string): Machine[] {
-    // For now, machines are listed for all nodes, but they skip internal 
-    // non-applicable transforms.
-    return allMachines;
-  }
+  /** All machines (automation sequences) are offered for every node type;
+   *  each machine internally skips transforms that don't apply. */
 
   // ── Context menu state ────────────────────────────────────────────────────
 
@@ -65,7 +61,7 @@
       x, y, 
       nodeId, nodeType, nodeLabel, 
       transforms: transformsFor(nodeType),
-      machines: machinesFor(nodeType)
+      machines: allMachines
     };
   }
 
@@ -96,16 +92,22 @@
   async function handleRunMachine(nodeId: string, machineName: string) {
     setStatus('info', `Executing Machine: ${machineName}…`);
     try {
-      const result = await invoke<TransformResult>('run_machine', {
+      const result = await invoke<TransformResult & { errors?: string[] }>('run_machine', {
         nodeId,
         machineName,
       });
       // Merge new elements into the store.
       for (const n of result.new_nodes) graphStore.addNode(n);
       for (const e of result.new_edges) graphStore.addEdge(e);
-      setStatus('success',
-        `Machine '${machineName}': +${result.new_nodes.length} node(s), +${result.new_edges.length} edge(s)`
-      );
+      if (result.errors?.length) {
+        setStatus('error',
+          `Machine '${machineName}': ${result.errors.join('; ')}`
+        );
+      } else {
+        setStatus('success',
+          `Machine '${machineName}': +${result.new_nodes.length} node(s), +${result.new_edges.length} edge(s)`
+        );
+      }
     } catch (e) {
       setStatus('error', String(e));
     } finally {
@@ -306,7 +308,7 @@
   const iconVT = svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`);
   const iconHash = svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>`);
 
-  function buildStylesheet(_theme: 'dark' | 'light'): cytoscape.StylesheetStyle[] {
+  function buildStylesheet(): cytoscape.StylesheetStyle[] {
     const root = document.documentElement;
     const v = (name: string) =>
       getComputedStyle(root).getPropertyValue(name).trim();
@@ -558,10 +560,6 @@
       case 'graph-zoom-out':
         zoomOut();
         break;
-      case 'graph-filters-clear':
-        // Dispatch to filter store
-        window.dispatchEvent(new CustomEvent('filter-clear-requested'));
-        break;
       case 'graph-select-all':
         // Select all visible nodes
         const allNodeIds = cy.nodes().map(n => n.id());
@@ -582,7 +580,7 @@
     cy = cytoscape({
       container,
       elements: [],
-      style: buildStylesheet($themeStore),
+      style: buildStylesheet(),
       layout: { name: 'preset' },
       minZoom: 0.05,
       maxZoom: 10,
@@ -676,7 +674,7 @@
     //    getComputedStyle returns correct CSS var values), then re-apply stylesheet.
     unsubTheme = themeStore.subscribe(t => {
       document.documentElement.setAttribute('data-theme', t);
-      cy?.style(buildStylesheet(t));
+      cy?.style(buildStylesheet());
     });
 
     // 4. Fetch the persisted graph from the backend.
@@ -725,7 +723,6 @@
     window.addEventListener('graph-layout-cycle', handleKeyboardEvents);
     window.addEventListener('graph-zoom-in', handleKeyboardEvents);
     window.addEventListener('graph-zoom-out', handleKeyboardEvents);
-    window.addEventListener('graph-filters-clear', handleKeyboardEvents);
     window.addEventListener('graph-select-all', handleKeyboardEvents);
     window.addEventListener('graph-deselect-all', handleKeyboardEvents);
   });
@@ -743,7 +740,6 @@
     window.removeEventListener('graph-layout-cycle', handleKeyboardEvents);
     window.removeEventListener('graph-zoom-in', handleKeyboardEvents);
     window.removeEventListener('graph-zoom-out', handleKeyboardEvents);
-    window.removeEventListener('graph-filters-clear', handleKeyboardEvents);
     window.removeEventListener('graph-select-all', handleKeyboardEvents);
     window.removeEventListener('graph-deselect-all', handleKeyboardEvents);
   });
@@ -826,6 +822,9 @@
 <svelte:window
   onkeydown={e => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    // Modifier combos belong to KeyboardShortcuts.svelte; handling plain keys
+    // here as well made ⌘F/⌘L/⌘H fire twice per press.
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'f' || e.key === 'F') fit();
     if (e.key === '+' || e.key === '=') zoomIn();
     if (e.key === '-') zoomOut();

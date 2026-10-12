@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { get } from 'svelte/store';
 import {
   graphStore,
@@ -34,7 +35,7 @@ interface LoadResult {
  * Resets the backend state, frontend store, selection, and known file path.
  */
 export async function newGraph(): Promise<boolean> {
-  if (!confirm('Clear the current graph? Unsaved changes will be lost.')) return false;
+  if (!(await confirm('Clear the current graph? Unsaved changes will be lost.'))) return false;
   try {
     await invoke('clear_graph');
     graphStore.setGraph({ nodes: [], edges: [] });

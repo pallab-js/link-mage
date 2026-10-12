@@ -327,3 +327,41 @@ impl PluginRegistry {
         &self.plugins
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The host ↔ SDK JSON contract, in both directions.
+    ///
+    /// This is the test that would have caught the `type` / `node_type` field
+    /// drift that made every plugin invocation fail to deserialize.
+    #[test]
+    fn plugin_abi_round_trip() {
+        // host → plugin: the SDK's `Node` must accept the host's JSON.
+        let host_node = Node::new("Domain");
+        let json = serde_json::to_string(&host_node).unwrap();
+        assert!(json.contains("\"type\""), "host must serialize as \"type\": {json}");
+        let sdk_node: link_mage_plugin_sdk::Node = serde_json::from_str(&json).unwrap();
+        assert_eq!(sdk_node.node_type, "Domain");
+
+        // plugin → host: SDK nodes (which never carry provenance) must
+        // deserialize into the host's `Node`.
+        let sdk_node = link_mage_plugin_sdk::Node::new_with_value("IP", "1.2.3.4");
+        let json = serde_json::to_string(&sdk_node).unwrap();
+        assert!(json.contains("\"type\""), "SDK must serialize as \"type\": {json}");
+        let node: Node = serde_json::from_str(&json).unwrap();
+        assert_eq!(node.node_type, "IP");
+        assert_eq!(node.properties["value"], "1.2.3.4");
+        assert!(node.provenance.is_none());
+
+        // edges both ways
+        let sdk_edge = link_mage_plugin_sdk::Edge::new("a", "b", "resolves");
+        let json = serde_json::to_string(&sdk_edge).unwrap();
+        let edge: Edge = serde_json::from_str(&json).unwrap();
+        assert_eq!(edge.label, "resolves");
+        let host_edge = Edge::new("a", "b", "resolves");
+        let json = serde_json::to_string(&host_edge).unwrap();
+        let _sdk_edge: link_mage_plugin_sdk::Edge = serde_json::from_str(&json).unwrap();
+    }
+}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
+  import { confirm } from '@tauri-apps/plugin-dialog';
   import {
     graphStore,
     selectionStore,
@@ -13,7 +14,7 @@
   import type { Node, Edge } from '$lib/stores';
   import { NODE_TYPES, type NodeType } from '$lib/nodeTypes';
   import ThemeToggle from './ThemeToggle.svelte';
-  import { newGraph, saveGraph, saveGraphAs, loadGraph, basename } from '$lib/graphActions';
+  import { newGraph, saveGraph, loadGraph, basename } from '$lib/graphActions';
   import FilterPanel from './FilterPanel.svelte';
   import ProvenancePanel from './ProvenancePanel.svelte';
   import TagManager from './TagManager.svelte';
@@ -157,7 +158,7 @@
         graphStore.removeNode(node.id);
         setStatus('info', `Removed node: ${nodeDisplayName(node)}`);
       } else {
-        if (!confirm(`Delete ${nodes.length} nodes and their edges?`)) return;
+        if (!(await confirm(`Delete ${nodes.length} nodes and their edges?`))) return;
         for (const n of nodes) {
           await invoke('remove_node', { id: n.id });
           graphStore.removeNode(n.id);
@@ -172,12 +173,15 @@
     }
   }
 
+  let collapseLabel = $state('');
+
   async function handleCollapse() {
     const nodes = $selectedNodes;
     if (nodes.length < 2 || busy.save) return;
-    
-    const label = prompt('Collection Label:', `${nodes.length} entities`);
-    if (!label) return;
+
+    // window.prompt is dead in Tauri v2 — the label comes from the inline
+    // input next to the Collapse button.
+    const label = collapseLabel.trim() || `${nodes.length} entities`;
 
     setBusy('save', true); // Re-use save busy state for now or add a new one
     try {
@@ -196,6 +200,7 @@
       graphStore.setGraph(fullGraph);
       
       selectionStore.set({ kind: 'node', ids: [col.id] });
+      collapseLabel = '';
       setStatus('success', `Collapsed ${nodes.length} nodes into '${label}'`);
     } catch (e) {
       setStatus('error', String(e));
@@ -215,7 +220,7 @@
         graphStore.removeEdge(edges[0].id);
         setStatus('info', 'Edge removed');
       } else {
-        if (!confirm(`Delete ${edges.length} edges?`)) return;
+        if (!(await confirm(`Delete ${edges.length} edges?`))) return;
         for (const e of edges) {
           await invoke('remove_edge', { id: e.id });
           graphStore.removeEdge(e.id);
@@ -334,7 +339,7 @@
 
   async function handleImportCsv() {
     if (busy.importCsv) return;
-    if (!confirm('Import CSV will replace the current graph. Continue?')) return;
+    if (!(await confirm('Import CSV will replace the current graph. Continue?'))) return;
     setBusy('importCsv', true);
     try {
       const g: Graph = await invoke('import_csv_dialog');
@@ -678,6 +683,12 @@
         </div>
         <div class="header-actions">
           {#if nodes.length > 1}
+            <input
+              class="form-input collapse-label"
+              bind:value={collapseLabel}
+              placeholder="Label"
+              title="Collection label (defaults to 'N entities')"
+            />
             <button
               class="btn btn-secondary btn-sm"
               onclick={handleCollapse}
@@ -1211,6 +1222,15 @@
   .header-actions {
     display: flex;
     gap: 4px;
+  }
+
+  /* Inline label input next to the Collapse button (window.prompt is dead
+     in Tauri v2). */
+  .collapse-label {
+    flex: 1;
+    min-width: 70px;
+    padding: 2px 5px;
+    font-size: var(--font-size-xs);
   }
 
   /* ── Provenance panel ─────────────────────────────────────────────────── */

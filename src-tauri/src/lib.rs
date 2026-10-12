@@ -2,7 +2,6 @@ pub mod commands;
 pub mod entities;
 pub mod graph;
 pub mod keychain;
-pub mod pipeline;
 pub mod plugin_api;
 pub mod provenance;
 pub mod state;
@@ -25,9 +24,6 @@ use commands::{
     add_remote_transform, list_remote_transforms, remove_remote_transform,
     // machines
     list_machines, run_machine,
-    // pipelines
-    create_pipeline, delete_pipeline, get_pipeline, list_pipeline_templates,
-    list_pipelines, run_pipeline, update_pipeline,
     // plugins
     load_plugins_dir,
     // API keys
@@ -56,20 +52,31 @@ pub fn run() {
                 if let Ok(base) = app_data {
                     let plugin_dir = base.join("plugins");
                     if plugin_dir.exists() {
-                        let (loaded, results) = plugin_api::scan_plugin_dir(&plugin_dir);
-                        let count = loaded.len();
-                        if let Ok(mut reg) = state.plugins.write() {
-                            reg.extend(loaded);
-                        }
-                        for r in &results {
-                            if r.ok { log::info!("[plugin] startup: {}", r.message); }
-                            else    { log::warn!("[plugin] startup: {}", r.message); }
-                        }
-                        if count > 0 {
+                        // Plugins are arbitrary native code executed
+                        // in-process — auto-load requires an explicit
+                        // opt-in marker file.
+                        let marker = plugin_dir.join("ENABLE_PLUGINS");
+                        if !marker.is_file() {
                             log::info!(
-                                "[plugin] {count} plugin(s) loaded from '{}'",
-                                plugin_dir.display()
+                                "[plugin] auto-load disabled — create '{}' to enable it",
+                                marker.display()
                             );
+                        } else {
+                            let (loaded, results) = plugin_api::scan_plugin_dir(&plugin_dir);
+                            let count = loaded.len();
+                            if let Ok(mut reg) = state.plugins.write() {
+                                reg.extend(loaded);
+                            }
+                            for r in &results {
+                                if r.ok { log::info!("[plugin] startup: {}", r.message); }
+                                else    { log::warn!("[plugin] startup: {}", r.message); }
+                            }
+                            if count > 0 {
+                                log::info!(
+                                    "[plugin] {count} plugin(s) loaded from '{}'",
+                                    plugin_dir.display()
+                                );
+                            }
                         }
                     }
 
@@ -119,14 +126,6 @@ pub fn run() {
             // machines
             list_machines,
             run_machine,
-            // pipelines
-            list_pipelines,
-            get_pipeline,
-            create_pipeline,
-            update_pipeline,
-            delete_pipeline,
-            run_pipeline,
-            list_pipeline_templates,
             // plugin management
             load_plugins_dir,
             // API key management

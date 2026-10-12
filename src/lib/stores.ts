@@ -249,6 +249,9 @@ export const statusStore: Writable<StatusMessage> = writable({ kind: 'idle', tex
 /** Controls whether the Settings side-sheet is open. */
 export const settingsOpenStore: Writable<boolean> = writable(false);
 
+/** Controls whether the left sidebar is visible (⌘B). */
+export const sidebarOpenStore: Writable<boolean> = writable(true);
+
 let _statusTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function setStatus(kind: StatusKind, text: string, ttl = 3000) {

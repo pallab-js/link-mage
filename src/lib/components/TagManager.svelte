@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tagStore, annotationStore, DEFAULT_TAG_COLORS, ANNOTATION_COLORS, type Tag, type Annotation, type AnnotationColor } from '$lib/stores/annotations';
   import { selectedNode, selectedEdge } from '$lib/stores';
-  import { onDestroy } from 'svelte';
+  import { confirm } from '@tauri-apps/plugin-dialog';
 
   let newTagName = $state('');
   let selectedColor = $state(DEFAULT_TAG_COLORS[0]);
@@ -9,26 +9,28 @@
   let editName = $state('');
   let editColor = $state('');
 
-  // Subscribe to tag updates
   let tags = $state<Tag[]>([]);
   let entityTags = $state<Tag[]>([]);
-  
-  const unsubTags = tagStore.subscribe(t => tags = t);
-  const unsubEntityTags = tagStore.entityTags.subscribe(_ => {
-    // Refresh entity tags when assignments change
+  let annotations = $state<Annotation[]>([]);
+
+  // One effect tracks the selection *and* the stores. Reading $selectedNode
+  // inside a plain .subscribe() callback was not reactive: switching
+  // selection kept showing (and deleting!) the previous entity's data.
+  $effect(() => {
     const node = $selectedNode;
     const edge = $selectedEdge;
-    const entityId = node?.id || edge?.id;
-    if (entityId) {
-      entityTags = tagStore.getForEntity(entityId);
-    } else {
-      entityTags = [];
-    }
-  });
+    const entityId = node?.id || edge?.id || null;
 
-  onDestroy(() => {
-    unsubTags();
-    unsubEntityTags();
+    const unsubs = [
+      tagStore.subscribe(t => (tags = t)),
+      tagStore.entityTags.subscribe(() => {
+        entityTags = entityId ? tagStore.getForEntity(entityId) : [];
+      }),
+      annotationStore.subscribe(() => {
+        annotations = entityId ? annotationStore.getByEntity(entityId) : [];
+      }),
+    ];
+    return () => unsubs.forEach(u => u());
   });
 
   function handleCreateTag() {
@@ -64,8 +66,8 @@
     editingTag = null;
   }
 
-  function handleDeleteTag(tag: Tag) {
-    if (!confirm(`Delete tag "${tag.name}"? This will remove it from all entities.`)) return;
+  async function handleDeleteTag(tag: Tag) {
+    if (!(await confirm(`Delete tag "${tag.name}"? This will remove it from all entities.`))) return;
     tagStore.remove(tag.id);
   }
 
@@ -112,22 +114,6 @@
   // Annotation state
   let annotationText = $state('');
   let annotationColor: AnnotationColor = $state('yellow');
-  let annotations = $state<Annotation[]>([]);
-
-  const unsubAnnotations = annotationStore.subscribe(a => {
-    const node = $selectedNode;
-    const edge = $selectedEdge;
-    const entity = node || edge;
-    if (entity) {
-      annotations = annotationStore.getByEntity(entity.id);
-    } else {
-      annotations = [];
-    }
-  });
-
-  onDestroy(() => {
-    unsubAnnotations();
-  });
 
   function handleAddAnnotation() {
     if (!annotationText.trim()) return;

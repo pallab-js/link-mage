@@ -18,6 +18,7 @@
     shortcuts: Array<{ keys: string[]; description: string; category?: string }>;
   }
 
+  // Only shortcuts that actually have handlers are listed here.
   const shortcutGroups: ShortcutGroup[] = [
     {
       title: 'File Operations',
@@ -53,28 +54,9 @@
       ],
     },
     {
-      title: 'Tags & Annotations',
-      icon: '🏷️',
-      shortcuts: [
-        { keys: ['1', '2', '3', '4', '5'], description: 'Quick tag assignment (1-5)' },
-        { keys: [modKey, 'T'], description: 'Toggle tags panel' },
-        { keys: [modKey, 'M'], description: 'Add annotation' },
-      ],
-    },
-    {
-      title: 'Pipelines',
-      icon: '⚙️',
-      shortcuts: [
-        { keys: [modKey, 'P'], description: 'Run pipeline' },
-        { keys: [modKey, '⇧', 'P'], description: 'Open pipeline manager' },
-      ],
-    },
-    {
       title: 'Search & Filter',
       icon: '🔍',
       shortcuts: [
-        { keys: [modKey, 'K'], description: 'Command palette / Search' },
-        { keys: [modKey, 'F', 'F'], description: 'Focus filter panel' },
         { keys: [modKey, '⇧', 'F'], description: 'Clear all filters' },
       ],
     },
@@ -84,27 +66,8 @@
       shortcuts: [
         { keys: [modKey, ','], description: 'Open settings' },
         { keys: [modKey, 'B'], description: 'Toggle sidebar' },
-        { keys: [modKey, '?'], description: 'Show this help' },
-        { keys: ['?'], description: 'Show help (anywhere)' },
-      ],
-    },
-    {
-      title: 'Node Actions',
-      icon: '⬤',
-      shortcuts: [
-        { keys: [modKey, 'D'], description: 'Duplicate node' },
-        { keys: [modKey, 'G'], description: 'Group nodes (collapse)' },
-        { keys: [modKey, 'U'], description: 'Ungroup collection' },
-        { keys: [modKey, 'E'], description: 'Add edge' },
-      ],
-    },
-    {
-      title: 'Transforms',
-      icon: '🔄',
-      shortcuts: [
-        { keys: [modKey, 'R'], description: 'Run transform on selection' },
-        { keys: [modKey, '⇧', 'R'], description: 'Run last transform' },
-        { keys: [modKey, 'T', 'T'], description: 'Open transform menu' },
+        { keys: ['?'], description: 'Show this help' },
+        { keys: ['Escape'], description: 'Close this help' },
       ],
     },
   ];

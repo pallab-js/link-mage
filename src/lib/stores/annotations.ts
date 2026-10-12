@@ -5,7 +5,7 @@
  * Inspired by Maltego's annotation features and professional investigation tools.
  */
 
-import { writable, derived, get } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import type { Writable } from 'svelte/store';
 
 /**
@@ -94,11 +94,6 @@ function createAnnotationStore() {
   return {
     subscribe,
 
-    /** Initialize with existing annotations */
-    initialize(annotations: Annotation[]) {
-      set(annotations);
-    },
-
     /** Add a new annotation */
     add(annotation: Omit<Annotation, 'id' | 'createdAt' | 'updatedAt'>): Annotation {
       const now = new Date().toISOString();
@@ -148,21 +143,6 @@ function createAnnotationStore() {
       const anns = get({ subscribe });
       return anns.filter(a => a.entityId === entityId);
     },
-
-    /** Clear all annotations */
-    clear() {
-      set([]);
-    },
-
-    /** Export annotations for persistence */
-    export(): Annotation[] {
-      return get({ subscribe });
-    },
-
-    /** Import annotations from persistence */
-    import(annotations: Annotation[]) {
-      set(annotations);
-    },
   };
 }
 
@@ -176,11 +156,6 @@ function createTagStore() {
 
   return {
     subscribe,
-
-    /** Initialize with existing tags */
-    initialize(tags: Tag[]) {
-      set(tags);
-    },
 
     /** Get entity tags store for subscription */
     get entityTags() {
@@ -300,63 +275,10 @@ function createTagStore() {
       );
       return tags.filter(t => tagIds.has(t.id));
     },
-
-    /** Get all entities with a specific tag */
-    getEntitiesWithTag(tagId: string): { entityId: string; entityType: 'node' | 'edge' }[] {
-      const entityTags = get(entityTagsStore);
-      return entityTags
-        .filter(et => et.tagId === tagId)
-        .map(et => ({ entityId: et.entityId, entityType: et.entityType }));
-    },
-
-    /** Clear all tags and assignments */
-    clear() {
-      set([]);
-      entityTagsStore.set([]);
-    },
-
-    /** Export for persistence */
-    export() {
-      return {
-        tags: get({ subscribe }),
-        entityTags: get(entityTagsStore),
-      };
-    },
-
-    /** Import from persistence */
-    import(data: { tags: Tag[]; entityTags: EntityTag[] }) {
-      set(data.tags);
-      entityTagsStore.set(data.entityTags);
-    },
   };
 }
 
 export const tagStore = createTagStore();
-
-// ── Derived Stores ────────────────────────────────────────────────────────────
-
-/** Get annotations for the currently selected entity (to be used with selection store) */
-export function createEntityAnnotationsStore(entityIdStore: Writable<string | null>) {
-  return derived(
-    [entityIdStore, annotationStore],
-    ([$entityId, $annotations]) => {
-      if (!$entityId) return [];
-      return $annotations.filter(a => a.entityId === $entityId);
-    }
-  );
-}
-
-/** Get tags for the currently selected entity */
-export function createEntityTagsStore(entityIdStore: Writable<string | null>) {
-  return derived(
-    [entityIdStore, tagStore],
-    ([$entityId, $tagStore]) => {
-      if (!$entityId) return [];
-      // This is a simplified version - in practice you'd subscribe to tagStore.entityTags too
-      return [];
-    }
-  );
-}
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 

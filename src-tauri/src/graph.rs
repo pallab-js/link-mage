@@ -16,7 +16,7 @@ pub struct Node {
     #[serde(rename = "type")]
     pub node_type: String,
     pub properties: HashMap<String, String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provenance: Option<Provenance>,
 }
 
@@ -59,7 +59,7 @@ pub struct Edge {
     pub target: String,
     pub label: String,
     pub properties: HashMap<String, String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provenance: Option<Provenance>,
 }
 
@@ -269,20 +269,20 @@ impl Graph {
             fs::create_dir_all(parent)?;
         }
         {
-            let file = fs::File::create(nodes_path)?;
-            let mut w = BufWriter::new(file);
-            w.write_all(b"id,type,properties\n")?;
+            let mut w = csv::WriterBuilder::new()
+                .has_headers(false)
+                .from_path(nodes_path)?;
+            w.write_record(["id", "type", "properties"])?;
             for node in &self.nodes {
                 let props_json = serde_json::to_string(&node.properties)
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                writeln!(
-                    w,
-                    "{},{},{}",
-                    csv_field(&node.id),
-                    csv_field(&node.node_type),
-                    csv_field(&props_json),
-                )?;
+                w.write_record([
+                    formula_guard(&node.id),
+                    formula_guard(&node.node_type),
+                    formula_guard(&props_json),
+                ])?;
             }
+            w.flush()?;
         }
 
         // Edges
@@ -290,22 +290,22 @@ impl Graph {
             fs::create_dir_all(parent)?;
         }
         {
-            let file = fs::File::create(edges_path)?;
-            let mut w = BufWriter::new(file);
-            w.write_all(b"id,source,target,label,properties\n")?;
+            let mut w = csv::WriterBuilder::new()
+                .has_headers(false)
+                .from_path(edges_path)?;
+            w.write_record(["id", "source", "target", "label", "properties"])?;
             for edge in &self.edges {
                 let props_json = serde_json::to_string(&edge.properties)
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                writeln!(
-                    w,
-                    "{},{},{},{},{}",
-                    csv_field(&edge.id),
-                    csv_field(&edge.source),
-                    csv_field(&edge.target),
-                    csv_field(&edge.label),
-                    csv_field(&props_json),
-                )?;
+                w.write_record([
+                    formula_guard(&edge.id),
+                    formula_guard(&edge.source),
+                    formula_guard(&edge.target),
+                    formula_guard(&edge.label),
+                    formula_guard(&props_json),
+                ])?;
             }
+            w.flush()?;
         }
 
         Ok(())
@@ -340,37 +340,39 @@ impl Graph {
         let mut id_map: HashMap<String, String> = HashMap::new();
 
         // ── Nodes ─────────────────────────────────────────────────────────────
-        let nodes_text = fs::read_to_string(nodes_path)?;
-        let mut node_lines = nodes_text.lines();
+        // The `csv` reader handles quoted fields spanning multiple physical
+        // lines — exactly what WHOIS-style multiline values produce on export.
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .flexible(true) // column counts checked manually for better errors
+            .from_path(nodes_path)?;
 
-        // Validate header
-        let node_header = node_lines.next().ok_or_else(|| {
-            io_invalid("nodes CSV is empty")
-        })?;
-        let node_cols = parse_csv_row(node_header);
-        if node_cols.len() < 3 {
-            return Err(io_invalid(format!(
-                "nodes CSV header has {} column(s), expected ≥ 3 (id, type, properties)",
-                node_cols.len()
-            )));
+        {
+            let headers = rdr.headers()?;
+            if headers.is_empty() {
+                return Err(io_invalid("nodes CSV is empty"));
+            }
+            if headers.len() < 3 {
+                return Err(io_invalid(format!(
+                    "nodes CSV header has {} column(s), expected ≥ 3 (id, type, properties)",
+                    headers.len()
+                )));
+            }
         }
 
-        for (i, line) in node_lines.enumerate() {
-            if line.trim().is_empty() {
-                continue;
-            }
+        for (i, record) in rdr.records().enumerate() {
+            let record = record?;
             let row_num = i + 2; // 1-based, accounting for header
-            let fields = parse_csv_row(line);
-            if fields.len() < 3 {
+            if record.len() < 3 {
                 return Err(io_invalid(format!(
                     "nodes CSV row {row_num}: expected ≥ 3 columns, got {}",
-                    fields.len()
+                    record.len()
                 )));
             }
 
-            let original_id = fields[0].clone();
-            let node_type   = fields[1].clone();
-            let properties  = json_to_str_map(&fields[2], row_num, "nodes")?;
+            let original_id = strip_formula_guard(&record[0]).to_string();
+            let node_type   = record[1].to_string();
+            let properties  = json_to_str_map(strip_formula_guard(&record[2]), row_num, "nodes")?;
 
             let new_id = Uuid::new_v4().to_string();
             id_map.insert(original_id, new_id.clone());
@@ -378,40 +380,40 @@ impl Graph {
         }
 
         // ── Edges ─────────────────────────────────────────────────────────────
-        let edges_text = fs::read_to_string(edges_path)?;
-        let mut edge_lines = edges_text.lines();
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .flexible(true)
+            .from_path(edges_path)?;
 
-        // Validate header
-        let edge_header = edge_lines.next().ok_or_else(|| {
-            io_invalid("edges CSV is empty")
-        })?;
-        let edge_cols = parse_csv_row(edge_header);
-        if edge_cols.len() < 5 {
-            return Err(io_invalid(format!(
-                "edges CSV header has {} column(s), expected ≥ 5 \
-                 (id, source, target, label, properties)",
-                edge_cols.len()
-            )));
+        {
+            let headers = rdr.headers()?;
+            if headers.is_empty() {
+                return Err(io_invalid("edges CSV is empty"));
+            }
+            if headers.len() < 5 {
+                return Err(io_invalid(format!(
+                    "edges CSV header has {} column(s), expected ≥ 5 \
+                     (id, source, target, label, properties)",
+                    headers.len()
+                )));
+            }
         }
 
-        for (i, line) in edge_lines.enumerate() {
-            if line.trim().is_empty() {
-                continue;
-            }
+        for (i, record) in rdr.records().enumerate() {
+            let record = record?;
             let row_num = i + 2;
-            let fields = parse_csv_row(line);
-            if fields.len() < 5 {
+            if record.len() < 5 {
                 return Err(io_invalid(format!(
                     "edges CSV row {row_num}: expected ≥ 5 columns, got {}",
-                    fields.len()
+                    record.len()
                 )));
             }
 
-            // fields[0] = original edge id (discarded — new UUID assigned below)
-            let orig_source = &fields[1];
-            let orig_target = &fields[2];
-            let label       = fields[3].clone();
-            let properties  = json_to_str_map(&fields[4], row_num, "edges")?;
+            // record[0] = original edge id (discarded — new UUID assigned below)
+            let orig_source = strip_formula_guard(&record[1]).to_string();
+            let orig_target = strip_formula_guard(&record[2]).to_string();
+            let label       = strip_formula_guard(&record[3]).to_string();
+            let properties  = json_to_str_map(strip_formula_guard(&record[4]), row_num, "edges")?;
 
             let new_source = id_map.get(orig_source.as_str()).ok_or_else(|| {
                 io_invalid(format!(
@@ -635,91 +637,21 @@ fn json_to_str_map(
     })
 }
 
-/// Parse one line of RFC-4180 CSV into an owned `Vec<String>`.
-///
-/// * Quoted fields (`"…"`) may contain commas and escaped double-quotes (`""`).
-/// * Unquoted fields are delimited by commas.
-/// * A trailing comma produces a final empty field.
-/// * Windows `\r` is stripped from unquoted field tails.
-fn parse_csv_row(line: &str) -> Vec<String> {
-    let mut fields: Vec<String> = Vec::new();
-    let mut chars = line.chars().peekable();
-
-    loop {
-        let field = if chars.peek() == Some(&'"') {
-            // ── Quoted field ─────────────────────────────────────────────
-            chars.next(); // consume opening `"`
-            let mut val = String::new();
-            loop {
-                match chars.next() {
-                    Some('"') => {
-                        if chars.peek() == Some(&'"') {
-                            chars.next(); // `""` → single `"`
-                            val.push('"');
-                        } else {
-                            break; // closing quote
-                        }
-                    }
-                    Some(c) => val.push(c),
-                    None => break, // unterminated — treat as closed
-                }
-            }
-            val
-        } else {
-            // ── Unquoted field ───────────────────────────────────────────
-            let mut val = String::new();
-            loop {
-                match chars.peek().copied() {
-                    Some(',') | None => break,
-                    Some(c) => {
-                        chars.next();
-                        val.push(c);
-                    }
-                }
-            }
-            // Strip stray Windows CR at end of last field on the line.
-            if val.ends_with('\r') {
-                val.pop();
-            }
-            val
-        };
-
-        fields.push(field);
-
-        // Consume field separator or stop at EOL.
-        match chars.peek().copied() {
-            Some(',') => {
-                chars.next();
-            }
-            _ => break,
-        }
-    }
-
-    fields
-}
-
-/// RFC-4180 CSV field escaping with formula injection protection.
-///
-/// Returns the field as-is if it contains no special characters, otherwise
-/// wraps it in double-quotes and escapes any embedded double-quotes by doubling
-/// them (`"` → `""`).
-///
-/// **Security:** To prevent CSV injection attacks (where a cell starting with
-/// `=`, `+`, `-`, or `@` could be interpreted as a formula by spreadsheet apps),
-/// we prefix such fields with a single quote which forces literal interpretation.
-fn csv_field(s: &str) -> String {
-    // CSV injection protection: prefix formula-starting characters with '
-    let needs_formula_escape = s.starts_with(['=', '+', '-', '@']);
-    
-    let needs_quote = s.contains([',', '"', '\n', '\r']);
-    
-    if needs_formula_escape {
-        // Prefix with single quote to force literal interpretation in spreadsheets
-        format!("'{}", s)
-    } else if needs_quote {
-        format!("\"{}\"", s.replace('"', "\"\""))
+/// Prefix fields that a spreadsheet would treat as a formula (CSV/Excel
+/// formula injection).  Quoting is handled by the `csv` writer.
+fn formula_guard(s: &str) -> String {
+    if s.starts_with(['=', '+', '-', '@']) {
+        format!("'{s}")
     } else {
         s.to_string()
+    }
+}
+
+/// Inverse of [`formula_guard`], applied on import so round-trips are lossless.
+fn strip_formula_guard(s: &str) -> &str {
+    match s.strip_prefix('\'') {
+        Some(rest) if rest.starts_with(['=', '+', '-', '@']) => rest,
+        _ => s,
     }
 }
 
@@ -911,24 +843,44 @@ mod tests {
     // ── CSV export ─────────────────────────────────────────────────────────────
 
     #[test]
-    fn csv_field_passthrough_simple() {
-        assert_eq!(csv_field("hello"), "hello");
-        assert_eq!(csv_field("192.168.1.1"), "192.168.1.1");
+    fn csv_multiline_properties_roundtrip() {
+        // WHOIS-style values contain embedded newlines; export quotes them and
+        // import must read them back intact (previously truncated at line breaks).
+        let mut g = Graph::new();
+        let mut node = Node::new("Domain");
+        node.properties.insert("value".into(), "example.com".into());
+        node.properties.insert(
+            "raw_whois".into(),
+            "Registrar: Foo\nName Servers:\n  ns1.example.com\n".into(),
+        );
+        let id = node.id.clone();
+        g.add_node(node);
+        g.add_edge(Edge::new(&id, &id, "self"));
+
+        let loaded = csv_roundtrip(&g);
+
+        assert_eq!(loaded.nodes.len(), 1);
+        assert_eq!(
+            loaded.nodes[0].properties.get("raw_whois").unwrap(),
+            "Registrar: Foo\nName Servers:\n  ns1.example.com\n"
+        );
+        assert_eq!(loaded.edges.len(), 1);
     }
 
     #[test]
-    fn csv_field_quotes_commas() {
-        assert_eq!(csv_field("a,b"), "\"a,b\"");
-    }
+    fn csv_formula_guard_roundtrip() {
+        // Fields starting with '=' are prefixed with ' on export (spreadsheet
+        // formula injection guard) and stripped again on import.
+        let mut g = Graph::new();
+        let a = Node::new("Domain");
+        let b = Node::new("IP");
+        let (aid, bid) = (a.id.clone(), b.id.clone());
+        g.add_node(a);
+        g.add_node(b);
+        g.add_edge(Edge::new(&aid, &bid, "=cmd|'/C calc'!A0"));
 
-    #[test]
-    fn csv_field_escapes_embedded_quotes() {
-        assert_eq!(csv_field(r#"say "hi""#), r#""say ""hi""""#);
-    }
-
-    #[test]
-    fn csv_field_quotes_newlines() {
-        assert_eq!(csv_field("line1\nline2"), "\"line1\nline2\"");
+        let loaded = csv_roundtrip(&g);
+        assert_eq!(loaded.edges[0].label, "=cmd|'/C calc'!A0");
     }
 
     #[test]
@@ -1026,61 +978,6 @@ mod tests {
         std::fs::remove_file(&np).ok();
         std::fs::remove_file(&ep).ok();
         std::fs::remove_dir(&dir).ok();
-    }
-
-    // ── parse_csv_row ──────────────────────────────────────────────────────────
-
-    #[test]
-    fn csv_row_simple_three_fields() {
-        assert_eq!(parse_csv_row("a,b,c"), vec!["a", "b", "c"]);
-    }
-
-    #[test]
-    fn csv_row_quoted_field_with_comma() {
-        assert_eq!(parse_csv_row(r#"a,"b,c",d"#), vec!["a", "b,c", "d"]);
-    }
-
-    #[test]
-    fn csv_row_quoted_field_with_escaped_quote() {
-        // `""` inside a quoted field → single `"`
-        assert_eq!(parse_csv_row(r#""say ""hi""",world"#), vec![r#"say "hi""#, "world"]);
-    }
-
-    #[test]
-    fn csv_row_empty_unquoted_fields() {
-        assert_eq!(parse_csv_row("a,,c"), vec!["a", "", "c"]);
-    }
-
-    #[test]
-    fn csv_row_trailing_comma_adds_empty_field() {
-        assert_eq!(parse_csv_row("a,b,"), vec!["a", "b", ""]);
-    }
-
-    #[test]
-    fn csv_row_single_field() {
-        assert_eq!(parse_csv_row("hello"), vec!["hello"]);
-    }
-
-    #[test]
-    fn csv_row_empty_quoted_field() {
-        assert_eq!(parse_csv_row(r#""","b""#), vec!["", "b"]);
-    }
-
-    #[test]
-    fn csv_row_strips_windows_cr() {
-        // Last field of a Windows-line-ending line may have a trailing \r.
-        let line = "a,b,c\r";
-        assert_eq!(parse_csv_row(line), vec!["a", "b", "c"]);
-    }
-
-    #[test]
-    fn csv_row_json_object_as_quoted_field() {
-        // Realistic properties column: JSON with commas, quoted by csv_field.
-        let json = r#"{"value":"1.2.3.4","note":"a, b"}"#;
-        let csv_line = format!("node-id,IP,{}", csv_field(json));
-        let fields = parse_csv_row(&csv_line);
-        assert_eq!(fields.len(), 3);
-        assert_eq!(fields[2], json);
     }
 
     // ── import_csv ─────────────────────────────────────────────────────────────

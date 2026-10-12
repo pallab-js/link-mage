@@ -71,6 +71,8 @@
     'remote_transform',
     'plugin',
     'import',
+    'pipeline',
+    'unknown',
   ];
 
   function toggleProvenanceSource(source: string) {

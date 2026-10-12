@@ -22,6 +22,15 @@
   --accent-success: #3dba7e;
   --accent-warning: #e0a33d;
 
+  /* semantic aliases — names used across components */
+  --bg-primary:     var(--bg-surface);
+  --bg-secondary:   var(--bg-elevated);
+  --error:          var(--accent-danger);
+  --error-bg:       rgba(224, 92, 92, .14);
+  --success:        var(--accent-success);
+  --success-bg:     rgba(61, 186, 126, .14);
+  --warning:        var(--accent-warning);
+
   /* graph canvas */
   --canvas-bg:      #0c0e15;
 
@@ -44,6 +53,7 @@
   /* shadow */
   --shadow-sm:  0 1px 3px rgba(0,0,0,.4);
   --shadow-md:  0 4px 12px rgba(0,0,0,.5);
+  --shadow-xl:  0 24px 60px rgba(0,0,0,.55);
 
   /* Cytoscape node backgrounds (per entity type) */
   --cyto-ip-bg:         #0e1e38;
@@ -108,6 +118,11 @@
   --accent-warning: #b7791f;
 
   --canvas-bg:      #e8ebf0;
+
+  /* semantic aliases (light) */
+  --error-bg:     rgba(197, 48, 48, .10);
+  --success-bg:   rgba(47, 158, 106, .12);
+  --shadow-xl:    0 24px 60px rgba(15, 23, 42, .18);
 
   /* Cytoscape node backgrounds (light overrides) */
   --cyto-ip-bg:         #dbeafe;
