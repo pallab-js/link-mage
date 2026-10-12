@@ -248,7 +248,6 @@ Ctrl+S (⌘S) - Save graph
 ### Technical Docs
 - **[ANALYSIS_REPORT.md](ANALYSIS_REPORT.md)** - Code analysis
 - **[ENHANCEMENTS_SUMMARY.md](ENHANCEMENTS_SUMMARY.md)** - Project summary
-- **[AUTOMATED_TEST_RESULTS.md](AUTOMATED_TEST_RESULTS.md)** - Test report
 - **[DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)** - Deployment guide
 
 ---

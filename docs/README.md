@@ -5,13 +5,13 @@ This folder contains internal project documentation not required for end users.
 ## For Developers
 
 - **ANALYSIS_REPORT.md** - Initial codebase analysis and improvements
-- **AUTOMATED_TEST_RESULTS.md** - Detailed test results and coverage
 - **DEPLOYMENT_CHECKLIST.md** - Production deployment procedures
 - **ENHANCEMENTS_SUMMARY.md** - Complete project enhancement summary
-- **FINAL_STATUS.md** - Final project status report
-- **FINAL_VERIFICATION.md** - Comprehensive verification report
-- **PROJECT_COMPLETION.md** - Project closure documentation
 - **UAT_CHECKLIST.md** - User Acceptance Testing checklist
+
+> Note: these are phase-A/development snapshot documents. Some details
+> (test counts, the earlier pipeline system) predate the current code;
+> see the root DOCUMENTATION_INDEX.md for current documentation.
 
 ## For End Users
 

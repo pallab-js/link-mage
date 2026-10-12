@@ -11,17 +11,16 @@
 - **Add Note**: Select node → Type note → Choose color → Add
 - **Pin Note**: Click 📍 to pin important annotations
 
-## ⚙️ Pipelines
-- **Run**: Right-click node → Select pipeline
-- **Built-in**: Domain Enrichment | IP Recon | Email Investigation | Malware Analysis
-- **Monitor**: Check status bar for progress
+## ⚙️ Machines (multi-step transforms)
+- **Run**: Right-click node → select machine
+- **Monitor**: Check status bar for progress and per-step results
 
 ## ⌨️ Essential Shortcuts
 ```
 File:     ⌘N New | ⌘O Open | ⌘S Save | ⌘⇧S Save As
 View:     ⌘F Fit | ⌘+ Zoom In | ⌘- Zoom Out | ⌘L Layout
 Select:   ⌘A All | Escape None | Delete Remove
-Tools:    ? Help | ⌘K Search | ⌘T Tags | ⌘M Note | ⌘P Pipeline
+Tools:    ? Help | ⌘⇧F Clear Filters | ⌘B Sidebar | ⌘, Settings
 ```
 
 ## 🔍 Filtering
@@ -30,12 +29,6 @@ Tools:    ? Help | ⌘K Search | ⌘T Tags | ⌘M Note | ⌘P Pipeline
 - **Degree**: Adjust min/max sliders
 - **Search**: Type in search box (debounced 300ms)
 - **Reset**: "Reset All Filters" button
-
-## 📊 Statistics
-- **View**: Open Stats Panel
-- **Metrics**: Nodes, Edges, Density, Components, Degree stats
-- **Top Hubs**: Most connected nodes listed
-- **Copy**: Click 📋 to export stats
 
 ## 🎨 Visual Indicators
 - 🟢 Green = High confidence / Success
@@ -58,11 +51,11 @@ Tools:    ? Help | ⌘K Search | ⌘T Tags | ⌘M Note | ⌘P Pipeline
 4. Check provenance
 5. Tag important findings
 6. Add annotations
-7. Run pipeline for automation
+7. Run a machine for multi-step automation
 
 ## 💡 Pro Tips
 - Press `?` anytime for full shortcut reference
-- Use pipelines for repetitive investigations
+- Use machines for repetitive investigations
 - Tag critical findings immediately
 - Pin important annotations
 - Filter by confidence for quality focus

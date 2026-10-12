@@ -95,38 +95,37 @@ This guide helps you test all the new features added to Link Mage. Each section 
 
 ---
 
-## 3. Transform Pipelines ⚙️
+## 3. Machines (multi-step transforms) ⚙️
 
 ### What to Test:
-- Built-in pipelines are available
-- Pipelines execute multiple transforms automatically
-- Results are tracked
+- Built-in machines are available
+- Machines execute multiple transforms in sequence
+- Per-step results and errors are reported
 
 ### Test Steps:
 
-1. **View available pipelines**
+1. **View available machines**
    - Right-click a Domain node
-   - Look for pipeline options in context menu
-   - **Expected**: See "Domain Enrichment" and other pipelines
+   - Look for machine options in context menu
+   - **Expected**: See "Domain Footprint"; IP nodes offer "IP Intel"
 
-2. **Run a pipeline**
-   - Select "Domain Enrichment" pipeline
-   - Watch execution progress (if UI implemented)
+2. **Run a machine**
+   - Select "Domain Footprint"
    - Wait for completion
-   - **Expected**: 
-     - Multiple new nodes created (IPs, Locations, etc.)
-     - Status message shows results
+   - **Expected**:
+     - Multiple new nodes created (IPs, WHOIS data, scraped entities)
+     - Status message shows results (including any per-step errors)
 
 3. **Check results**
    - Count new nodes
    - Check their provenance
-   - **Expected**: All nodes show pipeline in provenance chain
+   - **Expected**: New nodes show the machine's transforms in their provenance chain
 
 ### Success Criteria:
-✅ Pipelines appear in context menu
+✅ Machines appear in context menu
 ✅ Multiple transforms execute in sequence
 ✅ All results are added to graph
-✅ Provenance tracks pipeline execution
+✅ Provenance tracks the executed transforms
 
 ---
 
@@ -262,7 +261,7 @@ This guide helps you test all the new features added to Link Mage. Each section 
 
 1. Create new graph
 2. Add domain node manually
-3. Run "Domain Enrichment" pipeline
+3. Run the "Domain Footprint" machine
 4. Tag important nodes
 5. Add annotations to key findings
 6. Filter to show only high-confidence nodes
@@ -279,8 +278,7 @@ All features work together seamlessly without errors.
 ## Known Limitations
 
 1. **Annotations persistence**: Currently frontend-only, may not persist after reload
-2. **Pipeline timeout**: Simplified implementation, actual timeout requires async
-3. **Tag persistence**: Tags stored in frontend, need backend integration for persistence
+2. **Tag persistence**: Tags stored in frontend, need backend integration for persistence
 
 ---
 

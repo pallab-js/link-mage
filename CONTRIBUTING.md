@@ -102,6 +102,9 @@ npm run check
 cd src-tauri
 cargo test --lib
 
+# Frontend tests
+npm test
+
 # Build for production
 npm run build
 npm run tauri build
@@ -164,7 +167,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 **Examples:**
 ```bash
-feat: add pipeline execution tracking
+feat: add machine run tracking
 fix: resolve memory leak in status timer
 docs: update FEATURES.md with new shortcuts
 refactor: simplify filter store logic
@@ -184,6 +187,7 @@ refactor: simplify filter store logic
 ```bash
 # Before committing
 npm run check          # TypeScript
+npm test               # Frontend (Vitest)
 cd src-tauri && cargo test  # Rust
 ```
 

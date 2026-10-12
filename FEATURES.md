@@ -3,10 +3,9 @@
 ## Table of Contents
 1. [Data Provenance Tracking](#1-data-provenance-tracking)
 2. [Annotations & Tagging](#2-annotations--tagging)
-3. [Transform Pipelines](#3-transform-pipelines)
+3. [Transform Machines](#3-transform-machines)
 4. [Keyboard Shortcuts](#4-keyboard-shortcuts)
 5. [Advanced Filtering](#5-advanced-filtering)
-6. [Graph Statistics](#6-graph-statistics)
 
 ---
 
@@ -147,92 +146,32 @@ Add contextual notes and classification labels to entities for better organizati
 
 ---
 
-## 3. Transform Pipelines
+## 3. Transform Machines
 
 ### Overview
-Automate multi-step intelligence gathering with predefined transform sequences.
+Machines chain built-in transforms in sequence, feeding each step's output
+nodes into the next.
 
-### Built-in Pipelines
+### Built-in Machines
 
-#### 1. Domain Enrichment
+#### Domain Footprint
 **Purpose**: Comprehensive domain intelligence
-**Steps**:
-1. DNS Lookup (Domain → IP)
-2. GeoIP Lookup (IP → Location)
-3. WHOIS Lookup (Domain → Owner info)
+**Steps**: DNS Lookup → WHOIS → Scrape Webpage
 
-**Use Case**: Initial domain investigation
+#### IP Intel
+**Purpose**: Multi-angle IP investigation
+**Steps**: GeoIP Lookup → WHOIS → VirusTotal Lookup
 
-#### 2. IP Reconnaissance
-**Purpose**: IP address intelligence
-**Steps**:
-1. GeoIP Lookup (IP → Location)
-2. Reverse DNS (IP → Hostnames)
+### Usage
+1. Right-click a seed node
+2. Choose a machine from the context menu
+3. Results are added to the graph automatically
+4. Per-step results and errors appear in the status bar
 
-**Use Case**: Infrastructure analysis
-
-#### 3. Email Investigation
-**Purpose**: Email address tracing
-**Steps**:
-1. Domain Search (Email → Domain)
-2. DNS Lookup (Domain → IP)
-3. WHOIS Lookup (Domain → Owner)
-
-**Use Case**: Email origin tracing
-
-#### 4. Malware Analysis
-**Purpose**: File hash reputation check
-**Steps**:
-1. VirusTotal Hash lookup
-
-**Use Case**: Malware identification
-
-### Creating Custom Pipelines
-
-#### Pipeline Configuration
-```typescript
-interface PipelineStep {
-  transformName: string;    // Transform to execute
-  inputType: string;        // Required node type
-  description: string;      // Step description
-  timeout: number;          // Timeout in seconds
-  continueOnError: boolean; // Continue if fails
-  maxResults: number;       // Limit results (0 = unlimited)
-}
-```
-
-#### Best Practices
-1. **Start specific**: Begin with specific transforms
-2. **Handle errors**: Enable continueOnError for non-critical steps
-3. **Set timeouts**: Prevent hanging on slow transforms
-4. **Limit results**: Use maxResults to control graph size
-
-### Execution Flow
-
-1. **Select seed node**
-2. **Choose pipeline** from context menu
-3. **Sequential execution**:
-   - Step 1 runs on seed
-   - Results become input for Step 2
-   - Continues through all steps
-4. **Results added** to graph automatically
-
-### Monitoring
-
-#### Execution Status
-- ⏳ **Pending**: Step waiting to run
-- 🔄 **Running**: Currently executing
-- ✅ **Success**: Completed successfully
-- ❌ **Failed**: Error occurred
-- ⏭️ **Skipped**: Not executed
-
-#### Results Tracking
-- Nodes added per step
-- Edges created
-- Duration per step
-- Total execution time
-- Error messages (if any)
-
+### Success Criteria
+- Each step only runs on nodes it applies to
+- Machine-step failures are reported without aborting the run
+- New nodes carry the executed transforms in their provenance
 ---
 
 ## 4. Keyboard Shortcuts
@@ -276,11 +215,10 @@ Delete   Delete selected
 
 #### Quick Actions
 ```
-?        Show keyboard help
-Mod+K    Command palette
-Mod+T    Toggle tags panel
-Mod+M    Add annotation
-Mod+P    Run pipeline
+?            Show keyboard help
+Mod+⇧+F      Clear all filters
+Mod+B        Toggle sidebar
+Mod+,        Settings
 ```
 
 ### Customization
@@ -371,105 +309,6 @@ Visible = (Type matches)
 
 ---
 
-## 6. Graph Statistics
-
-### Overview
-Real-time analytics providing insights into graph structure and composition.
-
-### Metrics
-
-#### Basic Stats
-- **Total Nodes**: Count of all entities
-- **Total Edges**: Count of all relationships
-- **Density**: Connectivity ratio (0-100%)
-- **Components**: Connected subgraphs count
-
-#### Degree Analysis
-- **Average Degree**: Mean connections per node
-- **Max Degree**: Most-connected node
-- **Min Degree**: Least-connected node
-
-#### Node Classification
-- **Isolated Nodes**: Degree = 0 (no connections)
-- **Hub Nodes**: Degree ≥ 5 (highly connected)
-
-#### Type Distribution
-- Count per entity type
-- Visual bar chart
-- Percentage breakdown
-
-### Statistics Panel
-
-#### Layout
-```
-┌─────────────────────────────────┐
-│ 📊 Graph Statistics         [📋]│
-├─────────────────────────────────┤
-│ [Nodes] [Edges] [Density] [⊕]  │
-│                                 │
-│ Degree Distribution             │
-│   Average: 2.5                  │
-│   Max: 12                       │
-│   Min: 0                        │
-│                                 │
-│ Special Nodes                   │
-│   🔍 Isolated: 3                │
-│   ⭐ Hubs (5+): 2               │
-│                                 │
-│ Nodes by Type                   │
-│   Domain    ████████ 8          │
-│   IP        ██████   6          │
-│   Location  ██       2          │
-│                                 │
-│ Top Hubs                        │
-│  ⑫ example.com    Domain        │
-│  ⑧  192.168.1.1    IP           │
-└─────────────────────────────────┘
-```
-
-#### Features
-- **Auto-update**: Refreshes when graph changes
-- **Copy button**: Export stats to clipboard
-- **Visual bars**: Type distribution chart
-- **Hub list**: Top 5 most-connected nodes
-
-### Metrics Explained
-
-#### Graph Density
-Measures how connected the graph is:
-```
-Density = 2E / (V × (V-1))
-```
-Where E = edges, V = nodes
-
-- **0%**: No edges (isolated nodes)
-- **100%**: Complete graph (all possible edges)
-
-#### Connected Components
-Groups of nodes where each node is reachable from any other node in the same group.
-
-**Algorithm**: Breadth-first search (BFS)
-
-#### Degree Centrality
-Measures node importance based on connections:
-```
-Centrality = degree / (n - 1)
-```
-Where n = total nodes
-
-### Use Cases
-
-#### Quality Assessment
-- High density → Well-connected investigation
-- Many isolated nodes → Incomplete data
-- Multiple components → Separate investigations
-
-#### Focus Areas
-- Hub nodes → Key entities to investigate
-- Low confidence → Verify data sources
-- Recent activity → Active investigation areas
-
----
 
 ## Appendix
 
@@ -479,35 +318,33 @@ Where n = total nodes
 src/lib/
   types/
     provenance.ts      # Provenance types
-    pipeline.ts        # Pipeline types
   stores/
     annotations.ts     # Annotation/tag stores
-  utils/
-    graphStats.ts      # Statistics calculations
+    stores.ts          # Graph/selection/theme stores, machine types
+  filterStore.ts       # Filtering logic
   components/
     ProvenancePanel.svelte
     TagManager.svelte
     ShortcutHelp.svelte
-    StatsPanel.svelte
     FilterPanel.svelte
 
 src-tauri/src/
   provenance.rs        # Rust provenance module
-  pipeline.rs          # Rust pipeline engine
+  transforms.rs        # Transforms & machines
 ```
 
 ### Configuration
 
 #### Confidence Decay
-Edit in `provenance.ts`:
-```typescript
-const decayFactor = 0.98;  // 2% per step
+Edit the decay factor in `src-tauri/src/provenance.rs`:
+```rust
+let decay_factor = 0.98;  // 2% per step
 ```
 
 #### Hub Threshold
-Edit in `graphStats.ts`:
+Edit the hub preset in `src/lib/filterStore.ts`:
 ```typescript
-const HUB_THRESHOLD = 5;  // Connections for hub status
+hubs: { minDegree: 5, name: 'Hub Nodes (5+ connections)' },
 ```
 
 #### Search Debounce
@@ -526,11 +363,6 @@ const SEARCH_DEBOUNCE_MS = 300;  // Milliseconds
 #### Tags Not Persisting
 - Currently frontend-only (known limitation)
 - Backend integration needed for persistence
-
-#### Pipelines Not Running
-- Verify transforms are available
-- Check seed node type matches pipeline input
-- Review error messages in status bar
 
 #### Filters Not Working
 - Check if invert mode is enabled

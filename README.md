@@ -55,7 +55,6 @@
 - **Built-in Transforms**: DNS lookup, WHOIS, GeoIP, Web scraping, VirusTotal
 - **Remote Transforms**: HTTP-based transforms in any language
 - **Native Plugins**: Rust SDK for high-performance plugins
-- **Transform Pipelines**: Multi-step automated workflows
 
 #### 📊 Data Provenance Tracking
 - Automatic source tracking for every entity
@@ -242,7 +241,7 @@ See `plugins/example/` for a complete example.
 - **Frontend**: [SvelteKit 5](https://svelte.dev/), [TypeScript](https://www.typescriptlang.org/)
 - **Backend**: [Rust](https://www.rust-lang.org/), [Tauri v2](https://tauri.app/)
 - **Visualization**: [Cytoscape.js](https://js.cytoscape.org/)
-- **Testing**: Rust std::test, TypeScript type-checking
+- **Testing**: Rust (`cargo test`), Vitest (`npm test`), svelte-check (`npm run check`)
 
 ---
 
@@ -255,13 +254,15 @@ npm run check
 # Rust tests
 cd src-tauri && cargo test --lib
 
+# Frontend tests
+npm test
+
 # Build for production
 npm run build
 npm run tauri build
 ```
 
-**Test Coverage**: ~90%  
-**Tests**: 150+ automated tests
+**Tests**: ~130 Rust + 10 frontend
 
 ---
 
