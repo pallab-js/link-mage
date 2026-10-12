@@ -3,8 +3,8 @@ use std::fs;
 use std::io::{self, BufReader, BufWriter, Write};
 use std::path::Path;
 
-use quick_xml::Writer as XmlWriter;
 use quick_xml::events::{BytesDecl, BytesText, Event};
+use quick_xml::Writer as XmlWriter;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -39,10 +39,7 @@ impl Node {
         }
     }
 
-    pub fn with_provenance(
-        node_type: impl Into<String>,
-        provenance: Provenance,
-    ) -> Self {
+    pub fn with_provenance(node_type: impl Into<String>, provenance: Provenance) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             node_type: node_type.into(),
@@ -237,8 +234,7 @@ impl Graph {
         }
         let file = fs::File::create(path)?;
         let writer = BufWriter::new(file);
-        serde_json::to_writer_pretty(writer, self)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        serde_json::to_writer_pretty(writer, self).map_err(io::Error::other)
     }
 
     /// Deserialize a `Graph` from a JSON file at `path`.
@@ -274,8 +270,8 @@ impl Graph {
                 .from_path(nodes_path)?;
             w.write_record(["id", "type", "properties"])?;
             for node in &self.nodes {
-                let props_json = serde_json::to_string(&node.properties)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let props_json =
+                    serde_json::to_string(&node.properties).map_err(io::Error::other)?;
                 w.write_record([
                     formula_guard(&node.id),
                     formula_guard(&node.node_type),
@@ -295,8 +291,8 @@ impl Graph {
                 .from_path(edges_path)?;
             w.write_record(["id", "source", "target", "label", "properties"])?;
             for edge in &self.edges {
-                let props_json = serde_json::to_string(&edge.properties)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let props_json =
+                    serde_json::to_string(&edge.properties).map_err(io::Error::other)?;
                 w.write_record([
                     formula_guard(&edge.id),
                     formula_guard(&edge.source),
@@ -371,12 +367,17 @@ impl Graph {
             }
 
             let original_id = strip_formula_guard(&record[0]).to_string();
-            let node_type   = record[1].to_string();
-            let properties  = json_to_str_map(strip_formula_guard(&record[2]), row_num, "nodes")?;
+            let node_type = record[1].to_string();
+            let properties = json_to_str_map(strip_formula_guard(&record[2]), row_num, "nodes")?;
 
             let new_id = Uuid::new_v4().to_string();
             id_map.insert(original_id, new_id.clone());
-            graph.add_node(Node { id: new_id, node_type, properties, provenance: None });
+            graph.add_node(Node {
+                id: new_id,
+                node_type,
+                properties,
+                provenance: None,
+            });
         }
 
         // ── Edges ─────────────────────────────────────────────────────────────
@@ -412,8 +413,8 @@ impl Graph {
             // record[0] = original edge id (discarded — new UUID assigned below)
             let orig_source = strip_formula_guard(&record[1]).to_string();
             let orig_target = strip_formula_guard(&record[2]).to_string();
-            let label       = strip_formula_guard(&record[3]).to_string();
-            let properties  = json_to_str_map(strip_formula_guard(&record[4]), row_num, "edges")?;
+            let label = strip_formula_guard(&record[3]).to_string();
+            let properties = json_to_str_map(strip_formula_guard(&record[4]), row_num, "edges")?;
 
             let new_source = id_map.get(orig_source.as_str()).ok_or_else(|| {
                 io_invalid(format!(
@@ -430,7 +431,7 @@ impl Graph {
 
             // add_edge validates source/target existence — should always succeed here.
             graph.add_edge(Edge {
-                id:     Uuid::new_v4().to_string(),
+                id: Uuid::new_v4().to_string(),
                 source: new_source.clone(),
                 target: new_target.clone(),
                 label,
@@ -476,19 +477,19 @@ impl Graph {
 
         // <graphml xmlns=… xmlns:xsi=… xsi:schemaLocation=…>
         w.create_element("graphml")
-            .with_attribute(("xmlns",
-                "http://graphml.graphdrawing.org/graphml"))
-            .with_attribute(("xmlns:xsi",
-                "http://www.w3.org/2001/XMLSchema-instance"))
-            .with_attribute(("xsi:schemaLocation",
+            .with_attribute(("xmlns", "http://graphml.graphdrawing.org/graphml"))
+            .with_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"))
+            .with_attribute((
+                "xsi:schemaLocation",
                 "http://graphml.graphdrawing.org/graphml \
-                 http://graphml.graphdrawing.org/graphml/1.0/graphml.xsd"))
+                 http://graphml.graphdrawing.org/graphml/1.0/graphml.xsd",
+            ))
             .write_inner_content(|w| {
                 // ── Key declarations ─────────────────────────────────────
-                graphml_key(w, "d_type",       "node", "type",       "string")?;
-                graphml_key(w, "d_label",      "node", "label",      "string")?;
-                graphml_key(w, "d_props",      "node", "properties", "string")?;
-                graphml_key(w, "d_edge_label", "edge", "label",      "string")?;
+                graphml_key(w, "d_type", "node", "type", "string")?;
+                graphml_key(w, "d_label", "node", "label", "string")?;
+                graphml_key(w, "d_props", "node", "properties", "string")?;
+                graphml_key(w, "d_edge_label", "edge", "label", "string")?;
                 graphml_key(w, "d_edge_props", "edge", "properties", "string")?;
 
                 // ── <graph id="G" edgedefault="directed"> ─────────────────
@@ -498,19 +499,20 @@ impl Graph {
                     .write_inner_content(|w| {
                         // Nodes
                         for node in &self.nodes {
-                            let label = node.properties
+                            let label = node
+                                .properties
                                 .get("label")
                                 .or_else(|| node.properties.get("value"))
                                 .map(String::as_str)
                                 .unwrap_or(node.id.as_str());
 
                             let props_json = serde_json::to_string(&node.properties)
-                                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                                .map_err(io::Error::other)?;
 
                             w.create_element("node")
                                 .with_attribute(("id", node.id.as_str()))
                                 .write_inner_content(|w| {
-                                    graphml_data(w, "d_type",  &node.node_type)?;
+                                    graphml_data(w, "d_type", &node.node_type)?;
                                     graphml_data(w, "d_label", label)?;
                                     graphml_data(w, "d_props", &props_json)?;
                                     Ok(())
@@ -520,10 +522,10 @@ impl Graph {
                         // Edges
                         for edge in &self.edges {
                             let props_json = serde_json::to_string(&edge.properties)
-                                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                                .map_err(io::Error::other)?;
 
                             w.create_element("edge")
-                                .with_attribute(("id",     edge.id.as_str()))
+                                .with_attribute(("id", edge.id.as_str()))
                                 .with_attribute(("source", edge.source.as_str()))
                                 .with_attribute(("target", edge.target.as_str()))
                                 .write_inner_content(|w| {
@@ -552,10 +554,16 @@ impl Graph {
 
         // Create the collection node
         let mut collection = Node::new("Collection");
-        collection.properties.insert("label".into(), label.to_string());
-        collection.properties.insert("value".into(), label.to_string());
-        collection.properties.insert("count".into(), ids.len().to_string());
-        
+        collection
+            .properties
+            .insert("label".into(), label.to_string());
+        collection
+            .properties
+            .insert("value".into(), label.to_string());
+        collection
+            .properties
+            .insert("count".into(), ids.len().to_string());
+
         let col_id = collection.id.clone();
         let id_set: std::collections::HashSet<String> = ids.iter().cloned().collect();
 
@@ -566,9 +574,13 @@ impl Graph {
         for edge in self.edges.iter_mut() {
             let src_match = id_set.contains(&edge.source);
             let tgt_match = id_set.contains(&edge.target);
-            
-            if src_match { edge.source = col_id.clone(); }
-            if tgt_match { edge.target = col_id.clone(); }
+
+            if src_match {
+                edge.source = col_id.clone();
+            }
+            if tgt_match {
+                edge.target = col_id.clone();
+            }
         }
 
         // 3. Remove original nodes
@@ -595,8 +607,8 @@ fn graphml_key<W: Write>(
     attr_type: &str,
 ) -> io::Result<()> {
     w.create_element("key")
-        .with_attribute(("id",        id))
-        .with_attribute(("for",       for_el))
+        .with_attribute(("id", id))
+        .with_attribute(("for", for_el))
         .with_attribute(("attr.name", attr_name))
         .with_attribute(("attr.type", attr_type))
         .write_empty()
@@ -604,11 +616,7 @@ fn graphml_key<W: Write>(
 }
 
 /// Write `<data key="KEY">VALUE</data>`, escaping `VALUE` per XML rules.
-fn graphml_data<W: Write>(
-    w: &mut XmlWriter<W>,
-    key: &str,
-    value: &str,
-) -> io::Result<()> {
+fn graphml_data<W: Write>(w: &mut XmlWriter<W>, key: &str, value: &str) -> io::Result<()> {
     w.create_element("data")
         .with_attribute(("key", key))
         // BytesText::new escapes <, >, &, " automatically.
@@ -625,11 +633,7 @@ fn io_invalid(msg: impl Into<String>) -> io::Error {
 }
 
 /// Deserialise a compact JSON object string into `HashMap<String, String>`.
-fn json_to_str_map(
-    json: &str,
-    row_num: usize,
-    file: &str,
-) -> io::Result<HashMap<String, String>> {
+fn json_to_str_map(json: &str, row_num: usize, file: &str) -> io::Result<HashMap<String, String>> {
     serde_json::from_str(json).map_err(|e| {
         io_invalid(format!(
             "{file} CSV row {row_num}: invalid properties JSON — {e}"
@@ -720,7 +724,11 @@ mod tests {
         assert_eq!(g.edges.len(), 1);
 
         g.remove_node(&id_a);
-        assert_eq!(g.edges.len(), 0, "edge referencing removed node must be deleted");
+        assert_eq!(
+            g.edges.len(),
+            0,
+            "edge referencing removed node must be deleted"
+        );
     }
 
     #[test]
@@ -902,11 +910,21 @@ mod tests {
         let edges_csv = std::fs::read_to_string(&edges_path).unwrap();
 
         // Headers present
-        assert!(nodes_csv.starts_with("id,type,properties\n"), "wrong nodes header");
-        assert!(edges_csv.starts_with("id,source,target,label,properties\n"), "wrong edges header");
+        assert!(
+            nodes_csv.starts_with("id,type,properties\n"),
+            "wrong nodes header"
+        );
+        assert!(
+            edges_csv.starts_with("id,source,target,label,properties\n"),
+            "wrong edges header"
+        );
 
         // Correct row counts (header + 2 nodes)
-        assert_eq!(nodes_csv.lines().count(), 3, "expected header + 2 node rows");
+        assert_eq!(
+            nodes_csv.lines().count(),
+            3,
+            "expected header + 2 node rows"
+        );
         // Edge rows
         assert_eq!(edges_csv.lines().count(), 2, "expected header + 1 edge row");
 
@@ -933,8 +951,7 @@ mod tests {
         let mut g = Graph::new();
         let mut n = Node::with_id("n1", "IP");
         n.properties.insert("value".into(), "1.2.3.4".into());
-        n.properties
-            .insert("note".into(), "has, comma".into());
+        n.properties.insert("note".into(), "has, comma".into());
         g.add_node(n);
 
         let dir = std::env::temp_dir().join("link_mage_csv_props_test");
@@ -969,7 +986,10 @@ mod tests {
         let ep = dir.join("edges.csv");
         g.export_csv(&np, &ep).unwrap();
 
-        assert_eq!(std::fs::read_to_string(&np).unwrap(), "id,type,properties\n");
+        assert_eq!(
+            std::fs::read_to_string(&np).unwrap(),
+            "id,type,properties\n"
+        );
         assert_eq!(
             std::fs::read_to_string(&ep).unwrap(),
             "id,source,target,label,properties\n"
@@ -984,8 +1004,7 @@ mod tests {
 
     /// Export `g`, then import it back and return the reconstructed graph.
     fn csv_roundtrip(g: &Graph) -> Graph {
-        let dir = std::env::temp_dir()
-            .join(format!("link_mage_import_test_{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("link_mage_import_test_{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let np = dir.join("nodes.csv");
         let ep = dir.join("edges.csv");
@@ -1019,8 +1038,14 @@ mod tests {
         // The imported node IDs must NOT equal the original IDs.
         let imported_ids: std::collections::HashSet<&str> =
             imported.nodes.iter().map(|n| n.id.as_str()).collect();
-        assert!(!imported_ids.contains(id_a.as_str()), "old ID must not be reused");
-        assert!(!imported_ids.contains(id_b.as_str()), "old ID must not be reused");
+        assert!(
+            !imported_ids.contains(id_a.as_str()),
+            "old ID must not be reused"
+        );
+        assert!(
+            !imported_ids.contains(id_b.as_str()),
+            "old ID must not be reused"
+        );
     }
 
     #[test]
@@ -1073,7 +1098,8 @@ mod tests {
         // Value containing commas and quotes — exercises the CSV quoting path.
         let mut g = Graph::new();
         let mut n = Node::with_id("n1", "Info");
-        n.properties.insert("note".into(), r#"a, b "quoted""#.into());
+        n.properties
+            .insert("note".into(), r#"a, b "quoted""#.into());
         g.add_node(n);
         let imported = csv_roundtrip(&g);
         assert_eq!(imported.nodes[0].properties["note"], r#"a, b "quoted""#);
@@ -1089,22 +1115,26 @@ mod tests {
 
     #[test]
     fn import_csv_unknown_edge_source_returns_error() {
-        let dir = std::env::temp_dir()
-            .join(format!("link_mage_err_test_{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("link_mage_err_test_{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let np = dir.join("nodes.csv");
         let ep = dir.join("edges.csv");
 
         std::fs::write(&np, "id,type,properties\nn1,IP,{}\n").unwrap();
         // source "ghost" doesn't exist in nodes.csv
-        std::fs::write(&ep,
-            "id,source,target,label,properties\ne1,ghost,n1,link,{}\n"
-        ).unwrap();
+        std::fs::write(
+            &ep,
+            "id,source,target,label,properties\ne1,ghost,n1,link,{}\n",
+        )
+        .unwrap();
 
         let result = Graph::import_csv(&np, &ep);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("ghost"), "error should name the unknown ID: {msg}");
+        assert!(
+            msg.contains("ghost"),
+            "error should name the unknown ID: {msg}"
+        );
 
         std::fs::remove_file(&np).ok();
         std::fs::remove_file(&ep).ok();
@@ -1113,8 +1143,7 @@ mod tests {
 
     #[test]
     fn import_csv_bad_json_returns_error() {
-        let dir = std::env::temp_dir()
-            .join(format!("link_mage_badjson_test_{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("link_mage_badjson_test_{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let np = dir.join("nodes.csv");
         let ep = dir.join("edges.csv");
@@ -1133,8 +1162,7 @@ mod tests {
 
     #[test]
     fn import_csv_too_few_node_columns_returns_error() {
-        let dir = std::env::temp_dir()
-            .join(format!("link_mage_cols_test_{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("link_mage_cols_test_{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let np = dir.join("nodes.csv");
         let ep = dir.join("edges.csv");
@@ -1155,8 +1183,7 @@ mod tests {
 
     fn export_graphml_to_string(g: &Graph) -> String {
         // Each call gets a unique path so parallel test runs don't race.
-        let path = std::env::temp_dir()
-            .join(format!("link_mage_{}.graphml", Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!("link_mage_{}.graphml", Uuid::new_v4()));
         g.export_graphml(&path).expect("export should succeed");
         let s = std::fs::read_to_string(&path).unwrap();
         std::fs::remove_file(&path).ok();
@@ -1167,27 +1194,38 @@ mod tests {
     fn graphml_starts_with_xml_declaration() {
         let g = Graph::new();
         let xml = export_graphml_to_string(&g);
-        assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"),
-            "missing XML declaration: {}", &xml[..xml.len().min(80)]);
+        assert!(
+            xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"),
+            "missing XML declaration: {}",
+            &xml[..xml.len().min(80)]
+        );
     }
 
     #[test]
     fn graphml_contains_graphml_namespace() {
         let g = Graph::new();
         let xml = export_graphml_to_string(&g);
-        assert!(xml.contains("http://graphml.graphdrawing.org/graphml"),
-            "missing GraphML namespace");
+        assert!(
+            xml.contains("http://graphml.graphdrawing.org/graphml"),
+            "missing GraphML namespace"
+        );
     }
 
     #[test]
     fn graphml_key_declarations_present() {
         let g = Graph::new();
         let xml = export_graphml_to_string(&g);
-        assert!(xml.contains("id=\"d_type\""),      "missing d_type key");
-        assert!(xml.contains("id=\"d_label\""),     "missing d_label key");
-        assert!(xml.contains("id=\"d_props\""),     "missing d_props key");
-        assert!(xml.contains("id=\"d_edge_label\""),"missing d_edge_label key");
-        assert!(xml.contains("id=\"d_edge_props\""),"missing d_edge_props key");
+        assert!(xml.contains("id=\"d_type\""), "missing d_type key");
+        assert!(xml.contains("id=\"d_label\""), "missing d_label key");
+        assert!(xml.contains("id=\"d_props\""), "missing d_props key");
+        assert!(
+            xml.contains("id=\"d_edge_label\""),
+            "missing d_edge_label key"
+        );
+        assert!(
+            xml.contains("id=\"d_edge_props\""),
+            "missing d_edge_props key"
+        );
         assert!(xml.contains("for=\"node\""), "missing for=node");
         assert!(xml.contains("for=\"edge\""), "missing for=edge");
     }
@@ -1195,15 +1233,25 @@ mod tests {
     #[test]
     fn graphml_contains_node_and_edge_data() {
         let (mut g, id_a, id_b) = make_graph();
-        g.nodes[0].properties.insert("value".into(), "10.0.0.1".into());
-        g.nodes[0].properties.insert("label".into(), "10.0.0.1".into());
+        g.nodes[0]
+            .properties
+            .insert("value".into(), "10.0.0.1".into());
+        g.nodes[0]
+            .properties
+            .insert("label".into(), "10.0.0.1".into());
         g.add_edge(Edge::with_id("e1", &id_a, &id_b, "resolves-to"));
 
         let xml = export_graphml_to_string(&g);
 
         // Node elements
-        assert!(xml.contains(&format!("<node id=\"{}\"", id_a)), "missing node-a element");
-        assert!(xml.contains(&format!("<node id=\"{}\"", id_b)), "missing node-b element");
+        assert!(
+            xml.contains(&format!("<node id=\"{}\"", id_a)),
+            "missing node-a element"
+        );
+        assert!(
+            xml.contains(&format!("<node id=\"{}\"", id_b)),
+            "missing node-b element"
+        );
         // Node type data
         assert!(xml.contains(">IP<"), "missing IP type data");
         assert!(xml.contains(">Domain<"), "missing Domain type data");
@@ -1262,8 +1310,11 @@ mod tests {
         g.add_node(Node::with_id("n2", "Unknown"));
 
         let xml = export_graphml_to_string(&g);
-        assert!(xml.contains(">1.2.3.4<"), "value should be used as label fallback");
-        assert!(xml.contains(">n2<"),      "id should be used as label fallback");
+        assert!(
+            xml.contains(">1.2.3.4<"),
+            "value should be used as label fallback"
+        );
+        assert!(xml.contains(">n2<"), "id should be used as label fallback");
     }
 
     // ── Index integrity (O(1) HashMap index + swap_remove) ─────────────────────
@@ -1341,7 +1392,7 @@ mod tests {
         // Add a third node so we can make two distinct edges.
         g.add_node(Node::with_id("c", "URL"));
         g.add_edge(Edge::with_id("e1", &id_a, &id_b, "first"));
-        g.add_edge(Edge::with_id("e2", &id_a, "c",   "second"));
+        g.add_edge(Edge::with_id("e2", &id_a, "c", "second"));
 
         g.remove_edge("e1").expect("e1 should exist");
 
@@ -1394,8 +1445,10 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(Node::with_id("A", "IP"));
 
-        assert!(g.add_edge(Edge::with_id("loop", "A", "A", "self")),
-            "self-loop should be accepted");
+        assert!(
+            g.add_edge(Edge::with_id("loop", "A", "A", "self")),
+            "self-loop should be accepted"
+        );
         assert_eq!(g.edges.len(), 1);
 
         g.remove_node("A");
@@ -1416,8 +1469,11 @@ mod tests {
         }
 
         let node = g.find_node(&id_a).expect("node-a must still be findable");
-        assert_eq!(node.node_type, "Domain",       "type mutation must persist");
-        assert_eq!(node.properties["value"], "mutated", "property mutation must persist");
+        assert_eq!(node.node_type, "Domain", "type mutation must persist");
+        assert_eq!(
+            node.properties["value"], "mutated",
+            "property mutation must persist"
+        );
     }
 
     #[test]
@@ -1431,8 +1487,14 @@ mod tests {
         let mut g2: Graph = serde_json::from_str(&json).unwrap();
         g2.rebuild_index();
 
-        assert_eq!(g2.find_node(&id_a).map(|n| &n.node_type), Some(&"IP".to_string()));
-        assert_eq!(g2.find_node(&id_b).map(|n| &n.node_type), Some(&"Domain".to_string()));
+        assert_eq!(
+            g2.find_node(&id_a).map(|n| &n.node_type),
+            Some(&"IP".to_string())
+        );
+        assert_eq!(
+            g2.find_node(&id_b).map(|n| &n.node_type),
+            Some(&"Domain".to_string())
+        );
         assert!(g2.find_node("ghost").is_none());
     }
 
@@ -1459,15 +1521,17 @@ mod tests {
         // freshly loaded file can accept new edges.
         let (g, id_a, id_b) = make_graph();
 
-        let path = std::env::temp_dir()
-            .join(format!("link_mage_idx_test_{}.json", Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!("link_mage_idx_test_{}.json", Uuid::new_v4()));
         g.save_graph(&path).unwrap();
 
         let mut loaded = Graph::load_graph(&path).unwrap();
         std::fs::remove_file(&path).ok();
 
         let ok = loaded.add_edge(Edge::with_id("post-load", &id_a, &id_b, "linked"));
-        assert!(ok, "add_edge on a loaded graph must succeed (index must be rebuilt)");
+        assert!(
+            ok,
+            "add_edge on a loaded graph must succeed (index must be rebuilt)"
+        );
         assert_eq!(loaded.edges.len(), 1);
     }
 
@@ -1477,13 +1541,17 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(Node::with_id("recycled", "IP"));
 
-        let removed = g.remove_node("recycled").expect("first removal must succeed");
+        let removed = g
+            .remove_node("recycled")
+            .expect("first removal must succeed");
         assert_eq!(removed.id, "recycled");
         assert!(g.find_node("recycled").is_none());
 
         // Re-insert with the same ID.
-        assert!(g.add_node(Node::with_id("recycled", "Domain")),
-            "re-adding a removed id must succeed");
+        assert!(
+            g.add_node(Node::with_id("recycled", "Domain")),
+            "re-adding a removed id must succeed"
+        );
         assert_eq!(g.find_node("recycled").unwrap().node_type, "Domain");
     }
 
@@ -1507,7 +1575,7 @@ mod tests {
         let (mut g, id_a, id_b) = make_graph();
         let mut e = Edge::with_id("e1", &id_a, &id_b, "link");
         e.properties.insert("weight".into(), "0.9".into());
-        e.properties.insert("color".into(),  "red".into());
+        e.properties.insert("color".into(), "red".into());
 
         g.add_edge(e);
 
@@ -1515,7 +1583,7 @@ mod tests {
         // must be unaffected by index operations).
         let edge = g.edges.iter().find(|e| e.id == "e1").unwrap();
         assert_eq!(edge.properties["weight"], "0.9");
-        assert_eq!(edge.properties["color"],  "red");
+        assert_eq!(edge.properties["color"], "red");
     }
 
     #[test]
@@ -1553,8 +1621,8 @@ mod tests {
             g.add_node(Node::with_id(id, "IP"));
         }
 
-        let (removed, kept): (Vec<_>, Vec<_>) = ids.iter().enumerate()
-            .partition(|(i, _)| i % 2 == 0);
+        let (removed, kept): (Vec<_>, Vec<_>) =
+            ids.iter().enumerate().partition(|(i, _)| i % 2 == 0);
 
         for (_, id) in &removed {
             g.remove_node(id).expect("should exist before removal");
@@ -1563,10 +1631,16 @@ mod tests {
         assert_eq!(g.nodes.len(), kept.len());
 
         for (_, id) in &kept {
-            assert!(g.find_node(id).is_some(), "kept node '{id}' must be findable");
+            assert!(
+                g.find_node(id).is_some(),
+                "kept node '{id}' must be findable"
+            );
         }
         for (_, id) in &removed {
-            assert!(g.find_node(id).is_none(), "removed node '{id}' must be gone");
+            assert!(
+                g.find_node(id).is_none(),
+                "removed node '{id}' must be gone"
+            );
         }
 
         // Add 10 fresh nodes — index must still be valid.
@@ -1586,7 +1660,7 @@ mod tests {
         g.add_node(Node::with_id("hub", "Domain"));
 
         let spoke_ids: Vec<String> = (0..50).map(|i| format!("spoke-{i}")).collect();
-        let edge_ids:  Vec<String> = (0..50).map(|i| format!("edge-{i}")).collect();
+        let edge_ids: Vec<String> = (0..50).map(|i| format!("edge-{i}")).collect();
 
         for (sid, eid) in spoke_ids.iter().zip(edge_ids.iter()) {
             g.add_node(Node::with_id(sid, "IP"));
@@ -1603,10 +1677,16 @@ mod tests {
             g.remove_node(sid).expect("spoke must exist");
         }
 
-        assert_eq!(g.nodes.len(), 1 + kept_spokes.len(),
-            "hub + kept spokes must remain");
-        assert_eq!(g.edges.len(), kept_spokes.len(),
-            "only edges to kept spokes must survive");
+        assert_eq!(
+            g.nodes.len(),
+            1 + kept_spokes.len(),
+            "hub + kept spokes must remain"
+        );
+        assert_eq!(
+            g.edges.len(),
+            kept_spokes.len(),
+            "only edges to kept spokes must survive"
+        );
 
         // Every kept edge must still be removable via the index.
         for (i, _) in &kept_spokes {

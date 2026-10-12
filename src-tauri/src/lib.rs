@@ -8,27 +8,46 @@ pub mod state;
 pub mod tests;
 pub mod transforms;
 
-use tauri::Manager;
-use state::AppState;
 use commands::{
+    // graph CRUD
+    add_edge,
+    add_node,
+    // remote transforms
+    add_remote_transform,
+    // API keys
+    check_api_key,
+    clear_graph,
+    collapse_nodes,
+    delete_api_key,
+    // file I/O
+    export_csv_dialog,
+    export_graphml_dialog,
+    get_api_key,
+    get_graph,
+    import_csv_dialog,
+    list_api_services,
     // entities
     list_entities,
-    // graph CRUD
-    add_edge, add_node, clear_graph, collapse_nodes, get_graph, remove_edge,
-    remove_node, save_graph_dialog, save_graph_to_path, update_node,
-    // file I/O
-    export_csv_dialog, export_graphml_dialog, import_csv_dialog, load_graph_dialog,
-    // transforms
-    list_transforms, run_transform,
-    // remote transforms
-    add_remote_transform, list_remote_transforms, remove_remote_transform,
     // machines
-    list_machines, run_machine,
+    list_machines,
+    list_remote_transforms,
+    // transforms
+    list_transforms,
+    load_graph_dialog,
     // plugins
     load_plugins_dir,
-    // API keys
-    check_api_key, delete_api_key, get_api_key, list_api_services, set_api_key,
+    remove_edge,
+    remove_node,
+    remove_remote_transform,
+    run_machine,
+    run_transform,
+    save_graph_dialog,
+    save_graph_to_path,
+    set_api_key,
+    update_node,
 };
+use state::AppState;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -46,8 +65,8 @@ pub fn run() {
 
             // ── Auto-load plugins from the user's plugin directory ─────────────
             {
-                let state     = app.state::<AppState>();
-                let app_data  = app.handle().path().app_data_dir();
+                let state = app.state::<AppState>();
+                let app_data = app.handle().path().app_data_dir();
 
                 if let Ok(base) = app_data {
                     let plugin_dir = base.join("plugins");
@@ -68,8 +87,11 @@ pub fn run() {
                                 reg.extend(loaded);
                             }
                             for r in &results {
-                                if r.ok { log::info!("[plugin] startup: {}", r.message); }
-                                else    { log::warn!("[plugin] startup: {}", r.message); }
+                                if r.ok {
+                                    log::info!("[plugin] startup: {}", r.message);
+                                } else {
+                                    log::warn!("[plugin] startup: {}", r.message);
+                                }
                             }
                             if count > 0 {
                                 log::info!(
@@ -84,7 +106,10 @@ pub fn run() {
                     let rt_path = base.join("remote_transforms.json");
                     if rt_path.exists() {
                         if let Ok(json) = std::fs::read_to_string(&rt_path) {
-                            if let Ok(remote) = serde_json::from_str::<Vec<crate::transforms::RemoteTransform>>(&json) {
+                            if let Ok(remote) = serde_json::from_str::<
+                                Vec<crate::transforms::RemoteTransform>,
+                            >(&json)
+                            {
                                 let count = remote.len();
                                 if let Ok(mut reg) = state.remote_transforms.write() {
                                     *reg = remote;

@@ -1,8 +1,8 @@
-use std::sync::{Arc, RwLock};
+use crate::entities::EntityRegistry;
 use crate::graph::Graph;
 use crate::plugin_api::PluginRegistry;
 use crate::transforms::TransformRegistry;
-use crate::entities::EntityRegistry;
+use std::sync::{Arc, RwLock};
 
 /// Central application state shared across all Tauri commands.
 ///
@@ -13,9 +13,9 @@ use crate::entities::EntityRegistry;
 /// - `entities` — entity type registry (colors, display names).
 #[derive(Clone)]
 pub struct AppState {
-    pub graph:    Arc<RwLock<Graph>>,
+    pub graph: Arc<RwLock<Graph>>,
     pub registry: Arc<TransformRegistry>,
-    pub plugins:  Arc<RwLock<PluginRegistry>>,
+    pub plugins: Arc<RwLock<PluginRegistry>>,
     pub entities: Arc<EntityRegistry>,
     pub remote_transforms: Arc<RwLock<Vec<crate::transforms::RemoteTransform>>>,
 }
@@ -23,9 +23,9 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         Self {
-            graph:    Arc::new(RwLock::new(Graph::new())),
+            graph: Arc::new(RwLock::new(Graph::new())),
             registry: Arc::new(TransformRegistry::new()),
-            plugins:  Arc::new(RwLock::new(PluginRegistry::new())),
+            plugins: Arc::new(RwLock::new(PluginRegistry::new())),
             entities: Arc::new(EntityRegistry::new()),
             remote_transforms: Arc::new(RwLock::new(Vec::new())),
         }

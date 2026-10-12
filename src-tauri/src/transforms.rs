@@ -73,6 +73,12 @@ pub struct MachineRegistry {
     pub machines: Vec<Machine>,
 }
 
+impl Default for MachineRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MachineRegistry {
     pub fn new() -> Self {
         Self {
@@ -85,8 +91,12 @@ impl MachineRegistry {
                 Machine {
                     name: "IP Intel".into(),
                     description: "Runs GeoIP, WHOIS, and VirusTotal Lookup in sequence.".into(),
-                    transforms: vec!["GeoIP Lookup".into(), "WHOIS".into(), "VirusTotal Lookup".into()],
-                }
+                    transforms: vec![
+                        "GeoIP Lookup".into(),
+                        "WHOIS".into(),
+                        "VirusTotal Lookup".into(),
+                    ],
+                },
             ],
         }
     }
@@ -190,7 +200,10 @@ where
 
     let base = Node::new(node_type);
     let id = base.id.clone();
-    let node = Node { properties: props, ..base };
+    let node = Node {
+        properties: props,
+        ..base
+    };
     let edge = Edge::new(source_id, &id, edge_label);
 
     (node, edge)
@@ -209,9 +222,15 @@ pub struct RemoteTransform {
 }
 
 impl Transform for RemoteTransform {
-    fn name(&self) -> String { self.name.clone() }
-    fn description(&self) -> String { self.description.clone() }
-    fn applicable_types(&self) -> Vec<String> { self.applicable_types.clone() }
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+    fn description(&self) -> String {
+        self.description.clone()
+    }
+    fn applicable_types(&self) -> Vec<String> {
+        self.applicable_types.clone()
+    }
 
     fn run(&self, seed: &Node) -> Result<(Vec<Node>, Vec<Edge>), String> {
         info!("[RemoteTransform] Calling '{}' for '{}'", self.url, seed.id);
@@ -221,7 +240,8 @@ impl Transform for RemoteTransform {
             .build()
             .map_err(|e| format!("failed to build HTTP client: {e}"))?;
 
-        let response = client.post(&self.url)
+        let response = client
+            .post(&self.url)
             .json(seed)
             .send()
             .map_err(|e| format!("request failed: {e}"))?;
@@ -229,7 +249,8 @@ impl Transform for RemoteTransform {
         if !response.status().is_success() {
             let status = response.status();
             // Try to read the response body for a more detailed error message
-            let body_text = response.text()
+            let body_text = response
+                .text()
                 .unwrap_or_else(|_| "no response body".to_string());
             return Err(format!(
                 "remote server returned error: {} - {}",
@@ -245,7 +266,8 @@ impl Transform for RemoteTransform {
             error: Option<String>,
         }
 
-        let body: RemoteResponse = response.json()
+        let body: RemoteResponse = response
+            .json()
             .map_err(|e| format!("failed to parse JSON response: {e}"))?;
 
         if let Some(err) = body.error {
@@ -263,16 +285,19 @@ impl Transform for RemoteTransform {
 pub struct DnsLookupTransform;
 
 impl Transform for DnsLookupTransform {
-    fn name(&self) -> String { "DNS Lookup".into() }
+    fn name(&self) -> String {
+        "DNS Lookup".into()
+    }
 
     fn description(&self) -> String {
         "Resolve A / AAAA records and add IP address nodes.".into()
     }
 
-    fn applicable_types(&self) -> Vec<String> { vec!["Domain".into()] }
+    fn applicable_types(&self) -> Vec<String> {
+        vec!["Domain".into()]
+    }
 
     fn run(&self, seed: &Node) -> Result<(Vec<Node>, Vec<Edge>), String> {
-
         if seed.node_type != "Domain" {
             return Err(format!(
                 "DNS Lookup requires a Domain node, got '{}'",
@@ -280,7 +305,7 @@ impl Transform for DnsLookupTransform {
             ));
         }
 
-        let domain = node_value(&seed).to_string();
+        let domain = node_value(seed).to_string();
         info!("[DnsLookup] Resolving '{}'", domain);
 
         // Use the system resolver — `ToSocketAddrs` calls getaddrinfo(3)
@@ -353,9 +378,8 @@ fn tcp_whois(server: &str, query: &str) -> Result<String, String> {
         .next()
         .ok_or_else(|| format!("No address for WHOIS server '{}'", server))?;
 
-    let mut stream =
-        TcpStream::connect_timeout(&sock_addr, Duration::from_secs(10))
-            .map_err(|e| format!("Cannot connect to '{}': {}", server, e))?;
+    let mut stream = TcpStream::connect_timeout(&sock_addr, Duration::from_secs(10))
+        .map_err(|e| format!("Cannot connect to '{}': {}", server, e))?;
 
     stream.set_read_timeout(Some(Duration::from_secs(20))).ok();
     stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
@@ -418,7 +442,11 @@ fn parse_whois_field<'a>(raw: &'a str, key: &str) -> Vec<&'a str> {
             let field = line[..colon].trim().to_lowercase();
             if field == key_lower {
                 let val = line[colon + 1..].trim();
-                if !val.is_empty() { Some(val) } else { None }
+                if !val.is_empty() {
+                    Some(val)
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -427,28 +455,31 @@ fn parse_whois_field<'a>(raw: &'a str, key: &str) -> Vec<&'a str> {
 }
 
 impl Transform for WhoisTransform {
-    fn name(&self) -> String { "WHOIS".into() }
+    fn name(&self) -> String {
+        "WHOIS".into()
+    }
 
     fn description(&self) -> String {
         "Query WHOIS and add registrar, name-server, and network-owner nodes.".into()
     }
 
-    fn applicable_types(&self) -> Vec<String> { vec!["Domain".into(), "IP".into()] }
+    fn applicable_types(&self) -> Vec<String> {
+        vec!["Domain".into(), "IP".into()]
+    }
 
     fn run(&self, seed: &Node) -> Result<(Vec<Node>, Vec<Edge>), String> {
-
         match seed.node_type.as_str() {
             "Domain" | "IP" => {}
-            t => return Err(format!(
-                "WHOIS requires a Domain or IP node, got '{}'", t
-            )),
+            t => return Err(format!("WHOIS requires a Domain or IP node, got '{}'", t)),
         }
 
         // The query is written raw to the WHOIS TCP socket, so CR/LF would
         // inject extra commands — reject them outright.
-        let target = node_value(&seed).trim().to_string();
+        let target = node_value(seed).trim().to_string();
         if target.is_empty() || target.contains(['\r', '\n']) {
-            return Err(format!("WHOIS query rejected: {target:?} contains control characters"));
+            return Err(format!(
+                "WHOIS query rejected: {target:?} contains control characters"
+            ));
         }
         info!("[WHOIS] Querying '{}'", target);
 
@@ -494,11 +525,11 @@ impl Transform for WhoisTransform {
                 "Organisation",
                 registrar,
                 [
-                    ("role",       "registrar".to_string()),
-                    ("created",    created),
-                    ("expires",    expires),
+                    ("role", "registrar".to_string()),
+                    ("created", created),
+                    ("expires", expires),
                     ("abuse_email", abuse),
-                    ("raw_whois",  raw_snippet),
+                    ("raw_whois", raw_snippet),
                 ],
                 "registered-with",
             );
@@ -535,7 +566,7 @@ impl Transform for WhoisTransform {
 
             if let Some(org_name) = org {
                 // "CIDR" is used by ARIN; "inetnum" is the RIPE/APNIC equivalent.
-                let cidr_fields   = parse_whois_field(&raw, "CIDR");
+                let cidr_fields = parse_whois_field(&raw, "CIDR");
                 let inetnum_fields = parse_whois_field(&raw, "inetnum");
                 let cidr = cidr_fields
                     .first()
@@ -547,10 +578,7 @@ impl Transform for WhoisTransform {
                     &seed.id,
                     "Organisation",
                     &org_name,
-                    [
-                        ("role", "network-owner".to_string()),
-                        ("cidr", cidr),
-                    ],
+                    [("role", "network-owner".to_string()), ("cidr", cidr)],
                     "owned-by",
                 );
                 nodes.push(node);
@@ -568,7 +596,7 @@ impl Transform for WhoisTransform {
                 &format!("WHOIS result for {}", target),
                 [
                     ("raw_whois", snippet),
-                    ("note",      "no structured fields found".to_string()),
+                    ("note", "no structured fields found".to_string()),
                 ],
                 "whois-result",
             );
@@ -608,9 +636,15 @@ pub struct GeoIpTransform {
 impl GeoIpTransform {
     pub fn new() -> Self {
         let db_path = Self::find_db();
-        let reader  = db_path.as_ref().and_then(|p| {
+        let reader = db_path.as_ref().and_then(|p| {
             maxminddb::Reader::open_readfile(p)
-                .map_err(|e| warn!("[GeoIP] Failed to open database at '{}': {}", p.display(), e))
+                .map_err(|e| {
+                    warn!(
+                        "[GeoIP] Failed to open database at '{}': {}",
+                        p.display(),
+                        e
+                    )
+                })
                 .ok()
         });
         Self { db_path, reader }
@@ -665,7 +699,9 @@ impl GeoIpTransform {
 }
 
 impl Default for GeoIpTransform {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Return the platform-specific user data directory for link-mage.
@@ -675,7 +711,11 @@ fn user_data_dir() -> Option<std::path::PathBuf> {
 
     #[cfg(target_os = "macos")]
     {
-        Some(home.join("Library").join("Application Support").join("link-mage"))
+        Some(
+            home.join("Library")
+                .join("Application Support")
+                .join("link-mage"),
+        )
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -684,24 +724,30 @@ fn user_data_dir() -> Option<std::path::PathBuf> {
 }
 
 impl Transform for GeoIpTransform {
-    fn name(&self) -> String { "GeoIP Lookup".into() }
+    fn name(&self) -> String {
+        "GeoIP Lookup".into()
+    }
 
     fn description(&self) -> String {
         "Look up geographic location of an IP address using the MaxMind GeoLite2 database.".into()
     }
 
-    fn applicable_types(&self) -> Vec<String> { vec!["IP".into(), "IPv6".into()] }
+    fn applicable_types(&self) -> Vec<String> {
+        vec!["IP".into(), "IPv6".into()]
+    }
 
     fn run(&self, seed: &Node) -> Result<(Vec<Node>, Vec<Edge>), String> {
-
         match seed.node_type.as_str() {
             "IP" | "IPv6" => {}
-            t => return Err(format!(
-                "GeoIP Lookup requires an IP/IPv6 node, got '{}'", t
-            )),
+            t => {
+                return Err(format!(
+                    "GeoIP Lookup requires an IP/IPv6 node, got '{}'",
+                    t
+                ))
+            }
         }
 
-        let ip_str = node_value(&seed).to_string();
+        let ip_str = node_value(seed).to_string();
         info!("[GeoIP] Looking up '{}'", ip_str);
 
         // Validate the IP address before touching the DB.
@@ -724,13 +770,11 @@ impl Transform for GeoIpTransform {
                  Try re-downloading it from https://www.maxmind.com/en/geolite2/signup",
                 p.display()
             ),
-            None => {
-                "GeoLite2-City.mmdb not found. \
+            None => "GeoLite2-City.mmdb not found. \
                  Download from https://www.maxmind.com/en/geolite2/signup \
                  and set GEOIP_DB or place it at \
                  ~/Library/Application Support/link-mage/GeoLite2-City.mmdb"
-                    .to_string()
-            }
+                .to_string(),
         })?;
 
         // maxminddb 0.27 uses a two-step lazy API: lookup → LookupResult → decode.
@@ -751,24 +795,25 @@ impl Transform for GeoIpTransform {
         // In maxminddb 0.27, `Names` is a struct with named fields (e.g. `.english`).
         let country_name = city.country.names.english.unwrap_or("Unknown").to_string();
         let country_code = city.country.iso_code.unwrap_or("??").to_string();
-        let city_name    = city.city.names.english.unwrap_or("Unknown").to_string();
-        let subdivision  = city.subdivisions
+        let city_name = city.city.names.english.unwrap_or("Unknown").to_string();
+        let subdivision = city
+            .subdivisions
             .first()
             .and_then(|s| s.names.english)
             .unwrap_or("")
             .to_string();
         let lat = city.location.latitude.unwrap_or(0.0);
         let lon = city.location.longitude.unwrap_or(0.0);
-        let tz  = city.location.time_zone.unwrap_or("").to_string();
+        let tz = city.location.time_zone.unwrap_or("").to_string();
         let accuracy_km = city.location.accuracy_radius.unwrap_or(0);
 
         drop(city);
 
         let label = match (city_name.as_str(), country_name.as_str()) {
             ("Unknown", "Unknown") => format!("Location of {}", ip_str),
-            ("Unknown", country)   => country.to_string(),
-            (city, "Unknown")      => city.to_string(),
-            (city, country)        => format!("{}, {}", city, country),
+            ("Unknown", country) => country.to_string(),
+            (city, "Unknown") => city.to_string(),
+            (city, country) => format!("{}, {}", city, country),
         };
 
         debug!("[GeoIP] {} → {}", ip_str, label);
@@ -778,12 +823,12 @@ impl Transform for GeoIpTransform {
             "Location",
             &label,
             [
-                ("country",     country_name),
+                ("country", country_name),
                 ("country_code", country_code),
-                ("city",        city_name),
+                ("city", city_name),
                 ("subdivision", subdivision),
-                ("lat_lon",     format!("{:.4},{:.4}", lat, lon)),
-                ("timezone",    tz),
+                ("lat_lon", format!("{:.4},{:.4}", lat, lon)),
+                ("timezone", tz),
                 ("accuracy_km", accuracy_km.to_string()),
             ],
             "located-in",
@@ -852,8 +897,11 @@ mod tests {
     #[test]
     fn create_result_node_sets_value_and_label() {
         let (node, edge) = create_result_node(
-            "source-id", "Location", "London, UK",
-            [("country", "UK".to_string())], "located-in",
+            "source-id",
+            "Location",
+            "London, UK",
+            [("country", "UK".to_string())],
+            "located-in",
         );
         assert_eq!(node.properties["value"], "London, UK");
         assert_eq!(node.properties["label"], "London, UK");
@@ -868,8 +916,11 @@ mod tests {
         let key = "dynamic_key".to_string();
         let val = "dynamic_val".to_string();
         let (node, _edge) = create_result_node(
-            "source", "Info", "test",
-            [(key.clone(), val.clone())], "has-info",
+            "source",
+            "Info",
+            "test",
+            [(key.clone(), val.clone())],
+            "has-info",
         );
         assert_eq!(node.properties[&key], val);
     }
@@ -917,19 +968,13 @@ mod tests {
     #[test]
     fn extract_referral_arin_format() {
         let raw = "ReferralServer: whois://whois.arin.net\n";
-        assert_eq!(
-            extract_whois_referral(raw),
-            Some("whois.arin.net".into())
-        );
+        assert_eq!(extract_whois_referral(raw), Some("whois.arin.net".into()));
     }
 
     #[test]
     fn extract_referral_strips_path() {
         let raw = "ReferralServer: whois://whois.ripe.net/rest/ip\n";
-        assert_eq!(
-            extract_whois_referral(raw),
-            Some("whois.ripe.net".into())
-        );
+        assert_eq!(extract_whois_referral(raw), Some("whois.ripe.net".into()));
     }
 
     #[test]
@@ -961,14 +1006,16 @@ mod tests {
         let mut seed = Node::new("Domain");
         seed.properties.insert("value".into(), "example.com".into());
 
-        let (nodes, edges) = DnsLookupTransform.run(&seed)
+        let (nodes, edges) = DnsLookupTransform
+            .run(&seed)
             .expect("DNS should succeed for example.com");
 
         assert!(!nodes.is_empty(), "must return at least one IP node");
         for n in &nodes {
             assert!(
                 n.node_type == "IP" || n.node_type == "IPv6",
-                "unexpected node type: {}", n.node_type
+                "unexpected node type: {}",
+                n.node_type
             );
             assert_eq!(n.properties.get("source").map(String::as_str), Some("dns"));
         }
@@ -1006,7 +1053,8 @@ mod tests {
     fn whois_rejects_control_characters_in_query() {
         // CRLF would inject extra commands into the raw WHOIS TCP session.
         let mut node = Node::new("Domain");
-        node.properties.insert("value".into(), "example.com\r\nQUIT".into());
+        node.properties
+            .insert("value".into(), "example.com\r\nQUIT".into());
         let err = WhoisTransform.run(&node).unwrap_err();
         assert!(err.contains("control characters"), "{err}");
     }
@@ -1019,7 +1067,8 @@ mod tests {
         let mut seed = Node::new("Domain");
         seed.properties.insert("value".into(), "example.com".into());
 
-        let (nodes, edges) = WhoisTransform.run(&seed)
+        let (nodes, edges) = WhoisTransform
+            .run(&seed)
             .expect("WHOIS should succeed for example.com");
 
         assert!(!nodes.is_empty(), "should produce at least one node");
@@ -1028,7 +1077,8 @@ mod tests {
         let types: Vec<_> = nodes.iter().map(|n| &n.node_type).collect();
         assert!(
             types.iter().any(|t| *t == "Organisation" || *t == "Domain"),
-            "unexpected node types: {:?}", types
+            "unexpected node types: {:?}",
+            types
         );
     }
 
@@ -1038,7 +1088,11 @@ mod tests {
         let mut seed = Node::new("IP");
         seed.properties.insert("value".into(), "8.8.8.8".into());
         let result = WhoisTransform.run(&seed);
-        assert!(result.is_ok(), "WHOIS for 8.8.8.8 should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "WHOIS for 8.8.8.8 should succeed: {:?}",
+            result
+        );
     }
 
     // ── GeoIP guard tests (no DB needed) ─────────────────────────────────
@@ -1071,7 +1125,10 @@ mod tests {
     #[test]
     fn geoip_absent_db_returns_error() {
         // If no DB is found, run() must return Err (not panic).
-        let t = GeoIpTransform { db_path: None, reader: None };
+        let t = GeoIpTransform {
+            db_path: None,
+            reader: None,
+        };
         let mut seed = Node::new("IP");
         seed.properties.insert("value".into(), "8.8.8.8".into());
         let result = t.run(&seed);
@@ -1083,7 +1140,10 @@ mod tests {
     fn geoip_rejects_invalid_ip_string() {
         // A node with a garbage "value" should fail gracefully.
         // IP validation happens before the DB check, so reader: None is fine.
-        let t = GeoIpTransform { db_path: None, reader: None };
+        let t = GeoIpTransform {
+            db_path: None,
+            reader: None,
+        };
         let mut node = Node::new("IP");
         node.properties.insert("value".into(), "not-an-ip".into());
         let result = t.run(&node);
@@ -1111,7 +1171,11 @@ mod tests {
         assert!(n.properties.contains_key("country"));
         assert!(n.properties.contains_key("lat_lon"));
         let lat_lon = &n.properties["lat_lon"];
-        assert!(lat_lon.contains(','), "lat_lon should be 'lat,lon': {}", lat_lon);
+        assert!(
+            lat_lon.contains(','),
+            "lat_lon should be 'lat,lon': {}",
+            lat_lon
+        );
     }
 
     // ── applicable_types content ──────────────────────────────────────────
@@ -1119,24 +1183,42 @@ mod tests {
     #[test]
     fn dns_applicable_types_is_domain_only() {
         let types = DnsLookupTransform.applicable_types();
-        assert_eq!(types, vec!["Domain".to_string()],
-            "DNS Lookup must only fire on Domain nodes");
+        assert_eq!(
+            types,
+            vec!["Domain".to_string()],
+            "DNS Lookup must only fire on Domain nodes"
+        );
     }
 
     #[test]
     fn whois_applicable_types_includes_domain_and_ip() {
         let types = WhoisTransform.applicable_types();
-        assert!(types.iter().any(|s| s == "Domain"), "WHOIS must support Domain nodes");
-        assert!(types.iter().any(|s| s == "IP"),     "WHOIS must support IP nodes");
+        assert!(
+            types.iter().any(|s| s == "Domain"),
+            "WHOIS must support Domain nodes"
+        );
+        assert!(
+            types.iter().any(|s| s == "IP"),
+            "WHOIS must support IP nodes"
+        );
     }
 
     #[test]
     fn geoip_applicable_types_is_ip_and_ipv6() {
         let t = GeoIpTransform::new();
         let types = t.applicable_types();
-        assert!(types.iter().any(|s| s == "IP"),   "GeoIP must accept IP nodes");
-        assert!(types.iter().any(|s| s == "IPv6"), "GeoIP must accept IPv6 nodes");
-        assert!(!types.iter().any(|s| s == "Domain"), "GeoIP must not accept Domain nodes");
+        assert!(
+            types.iter().any(|s| s == "IP"),
+            "GeoIP must accept IP nodes"
+        );
+        assert!(
+            types.iter().any(|s| s == "IPv6"),
+            "GeoIP must accept IPv6 nodes"
+        );
+        assert!(
+            !types.iter().any(|s| s == "Domain"),
+            "GeoIP must not accept Domain nodes"
+        );
     }
 
     // ── TransformRegistry::for_node_type ──────────────────────────────────
@@ -1144,29 +1226,43 @@ mod tests {
     #[test]
     fn registry_for_domain_includes_dns_and_whois_excludes_geoip() {
         let reg = TransformRegistry::new();
-        let names: Vec<String> =
-            reg.for_node_type("Domain").iter().map(|t| t.name()).collect();
+        let names: Vec<String> = reg
+            .for_node_type("Domain")
+            .iter()
+            .map(|t| t.name())
+            .collect();
 
-        assert!(names.iter().any(|n| n.contains("DNS")),
-            "DNS Lookup must be offered for Domain nodes");
-        assert!(names.iter().any(|n| n.contains("WHOIS")),
-            "WHOIS must be offered for Domain nodes");
-        assert!(!names.iter().any(|n| n.contains("GeoIP")),
-            "GeoIP must NOT be offered for Domain nodes");
+        assert!(
+            names.iter().any(|n| n.contains("DNS")),
+            "DNS Lookup must be offered for Domain nodes"
+        );
+        assert!(
+            names.iter().any(|n| n.contains("WHOIS")),
+            "WHOIS must be offered for Domain nodes"
+        );
+        assert!(
+            !names.iter().any(|n| n.contains("GeoIP")),
+            "GeoIP must NOT be offered for Domain nodes"
+        );
     }
 
     #[test]
     fn registry_for_ip_includes_whois_and_geoip_excludes_dns() {
         let reg = TransformRegistry::new();
-        let names: Vec<String> =
-            reg.for_node_type("IP").iter().map(|t| t.name()).collect();
+        let names: Vec<String> = reg.for_node_type("IP").iter().map(|t| t.name()).collect();
 
-        assert!(names.iter().any(|n| n.contains("WHOIS")),
-            "WHOIS must be offered for IP nodes");
-        assert!(names.iter().any(|n| n.contains("GeoIP")),
-            "GeoIP must be offered for IP nodes");
-        assert!(!names.iter().any(|n| n.contains("DNS")),
-            "DNS Lookup must NOT be offered for IP nodes");
+        assert!(
+            names.iter().any(|n| n.contains("WHOIS")),
+            "WHOIS must be offered for IP nodes"
+        );
+        assert!(
+            names.iter().any(|n| n.contains("GeoIP")),
+            "GeoIP must be offered for IP nodes"
+        );
+        assert!(
+            !names.iter().any(|n| n.contains("DNS")),
+            "DNS Lookup must NOT be offered for IP nodes"
+        );
     }
 
     #[test]
@@ -1203,10 +1299,12 @@ mod tests {
     #[test]
     fn all_transforms_have_non_empty_name_and_description() {
         for t in TransformRegistry::new().all() {
-            assert!(!t.name().is_empty(),
-                "transform name must not be empty");
-            assert!(!t.description().is_empty(),
-                "transform '{}' description must not be empty", t.name());
+            assert!(!t.name().is_empty(), "transform name must not be empty");
+            assert!(
+                !t.description().is_empty(),
+                "transform '{}' description must not be empty",
+                t.name()
+            );
         }
     }
 
@@ -1227,7 +1325,8 @@ mod tests {
     fn whois_guard_fail_returns_err() {
         // Email nodes are rejected by WHOIS.
         let mut node = Node::new("Email");
-        node.properties.insert("value".into(), "user@example.com".into());
+        node.properties
+            .insert("value".into(), "user@example.com".into());
         assert!(WhoisTransform.run(&node).is_err());
     }
 
@@ -1235,11 +1334,14 @@ mod tests {
     fn geoip_guard_fail_returns_err() {
         // All GeoIP guard failures must return Err.
         for &(node_type, ip_val) in &[
-            ("Domain", "example.com"),  // wrong type
-            ("IP",     "192.168.1.1"),  // private
-            ("IP",     "127.0.0.1"),    // loopback
+            ("Domain", "example.com"), // wrong type
+            ("IP", "192.168.1.1"),     // private
+            ("IP", "127.0.0.1"),       // loopback
         ] {
-            let t = GeoIpTransform { db_path: None, reader: None };
+            let t = GeoIpTransform {
+                db_path: None,
+                reader: None,
+            };
             let mut node = Node::new(node_type);
             node.properties.insert("value".into(), ip_val.into());
             assert!(t.run(&node).is_err());
@@ -1251,20 +1353,28 @@ mod tests {
     #[test]
     fn geoip_rejects_ipv6_loopback() {
         // ::1 is the IPv6 loopback; must be rejected before DB access.
-        let t = GeoIpTransform { db_path: None, reader: None };
+        let t = GeoIpTransform {
+            db_path: None,
+            reader: None,
+        };
         let mut node = Node::new("IPv6");
         node.properties.insert("value".into(), "::1".into());
 
         let result = t.run(&node);
         assert!(result.is_err(), "IPv6 loopback must be rejected");
-        assert!(result.unwrap_err().to_lowercase().contains("private"),
-            "error must mention private/loopback");
+        assert!(
+            result.unwrap_err().to_lowercase().contains("private"),
+            "error must mention private/loopback"
+        );
     }
 
     #[test]
     fn geoip_rejects_private_ipv6_ula() {
         // fc00::1 is in the Unique Local Address block (fc00::/7).
-        let t = GeoIpTransform { db_path: None, reader: None };
+        let t = GeoIpTransform {
+            db_path: None,
+            reader: None,
+        };
         let mut node = Node::new("IPv6");
         node.properties.insert("value".into(), "fc00::1".into());
 
@@ -1276,14 +1386,20 @@ mod tests {
     fn geoip_ipv6_node_type_passes_type_guard() {
         // A public IPv6 address with db_path=None must fail at the *DB* step,
         // not the type guard.  This confirms the type guard accepts "IPv6".
-        let t = GeoIpTransform { db_path: None, reader: None };
+        let t = GeoIpTransform {
+            db_path: None,
+            reader: None,
+        };
         let mut node = Node::new("IPv6");
         // 2001:4860:4860::8888 — Google's public IPv6 DNS.
-        node.properties.insert("value".into(), "2001:4860:4860::8888".into());
+        node.properties
+            .insert("value".into(), "2001:4860:4860::8888".into());
 
         let err = t.run(&node).unwrap_err();
-        assert!(err.to_lowercase().contains("geolite2"),
-            "error must be about the missing DB, not the type guard: {err}");
+        assert!(
+            err.to_lowercase().contains("geolite2"),
+            "error must be about the missing DB, not the type guard: {err}"
+        );
     }
 
     // ── GeoIP — missing "value" property ─────────────────────────────────
@@ -1293,14 +1409,19 @@ mod tests {
         // node_value() falls back to node.id (a UUID) when "value" is absent.
         // A UUID is not a valid IP address → "Invalid IP" parse error.
         // IP parsing happens before the DB check, so reader: None is fine.
-        let t = GeoIpTransform { db_path: None, reader: None };
+        let t = GeoIpTransform {
+            db_path: None,
+            reader: None,
+        };
         // Deliberately omit "value".
         let node = Node::new("IP");
 
         let result = t.run(&node);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Invalid IP"),
-            "missing value must produce an 'Invalid IP' error");
+        assert!(
+            result.unwrap_err().contains("Invalid IP"),
+            "missing value must produce an 'Invalid IP' error"
+        );
     }
 
     // ── is_private_ip helper ──────────────────────────────────────────────
@@ -1308,7 +1429,13 @@ mod tests {
     #[test]
     fn private_ip_detection() {
         use std::net::IpAddr;
-        let private = ["10.0.0.1", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.1.1"];
+        let private = [
+            "10.0.0.1",
+            "172.16.0.1",
+            "172.31.255.255",
+            "192.168.1.1",
+            "169.254.1.1",
+        ];
         for s in private {
             let ip: IpAddr = s.parse().unwrap();
             assert!(is_private_ip(ip), "{} should be private", s);
@@ -1343,27 +1470,37 @@ impl ScrapeWebpageTransform {
 }
 
 impl Default for ScrapeWebpageTransform {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Transform for ScrapeWebpageTransform {
-    fn name(&self) -> String { "Scrape Webpage".into() }
+    fn name(&self) -> String {
+        "Scrape Webpage".into()
+    }
 
     fn description(&self) -> String {
         "Fetch the HTTP page to extract title and outbound links.".into()
     }
 
-    fn applicable_types(&self) -> Vec<String> { vec!["Domain".into(), "URL".into()] }
+    fn applicable_types(&self) -> Vec<String> {
+        vec!["Domain".into(), "URL".into()]
+    }
 
     fn run(&self, seed: &Node) -> Result<(Vec<Node>, Vec<Edge>), String> {
-
         match seed.node_type.as_str() {
             "Domain" | "URL" => {}
-            t => return Err(format!("Scrape Webpage requires a Domain or URL node, got '{}'", t)),
+            t => {
+                return Err(format!(
+                    "Scrape Webpage requires a Domain or URL node, got '{}'",
+                    t
+                ))
+            }
         }
 
-        let value = node_value(&seed).to_string();
-        
+        let value = node_value(seed).to_string();
+
         let url = if seed.node_type == "Domain" {
             format!("http://{}", value)
         } else {
@@ -1372,7 +1509,9 @@ impl Transform for ScrapeWebpageTransform {
 
         info!("[Scrape] Fetching '{}'", url);
 
-        let resp = self.client.get(&url)
+        let resp = self
+            .client
+            .get(&url)
             .send()
             .map_err(|e| format!("HTTP request failed: {}", e))?;
 
@@ -1380,8 +1519,10 @@ impl Transform for ScrapeWebpageTransform {
             return Err(format!("HTTP request failed with status {}", resp.status()));
         }
 
-        let body = resp.text().map_err(|e| format!("Failed to read response body: {}", e))?;
-        
+        let body = resp
+            .text()
+            .map_err(|e| format!("Failed to read response body: {}", e))?;
+
         let document = scraper::Html::parse_document(&body);
         let title_selector = scraper::Selector::parse("title").unwrap();
         let link_selector = scraper::Selector::parse("a[href]").unwrap();
@@ -1409,18 +1550,18 @@ impl Transform for ScrapeWebpageTransform {
         for link_element in document.select(&link_selector) {
             if let Some(href) = link_element.value().attr("href") {
                 let href_clean = href.trim();
-                if href_clean.starts_with("http://") || href_clean.starts_with("https://") {
-                    if seen_links.insert(href_clean.to_string()) {
-                        let (node, edge) = create_result_node(
-                            &seed.id,
-                            "URL",
-                            href_clean,
-                            [("source", "html_link".to_string())],
-                            "links-to",
-                        );
-                        nodes.push(node);
-                        edges.push(edge);
-                    }
+                if (href_clean.starts_with("http://") || href_clean.starts_with("https://"))
+                    && seen_links.insert(href_clean.to_string())
+                {
+                    let (node, edge) = create_result_node(
+                        &seed.id,
+                        "URL",
+                        href_clean,
+                        [("source", "html_link".to_string())],
+                        "links-to",
+                    );
+                    nodes.push(node);
+                    edges.push(edge);
                 }
             }
         }
@@ -1452,11 +1593,11 @@ impl Transform for ScrapeWebpageTransform {
 /// that by making each caller wait for the previous one to finish sleeping and
 /// update the timestamp.
 pub struct RateLimiter {
-    last:         Mutex<Option<Instant>>,
+    last: Mutex<Option<Instant>>,
     min_interval: Duration,
     /// Maximum time a caller is willing to wait.  If the remaining gap exceeds
     /// this, the caller gets an immediate `Err` instead of blocking.
-    max_wait:     Duration,
+    max_wait: Duration,
 }
 
 impl RateLimiter {
@@ -1464,9 +1605,9 @@ impl RateLimiter {
     /// We use 15.5 s (≈ 15 500 ms) to give a small safety margin.
     pub fn virustotal_public() -> Self {
         Self {
-            last:         Mutex::new(None),
+            last: Mutex::new(None),
             min_interval: Duration::from_millis(15_500),
-            max_wait:     Duration::from_secs(60),
+            max_wait: Duration::from_secs(60),
         }
     }
 
@@ -1476,7 +1617,10 @@ impl RateLimiter {
     /// `Err(msg)` when the required wait exceeds `max_wait`.
     pub fn acquire(&self) -> Result<(), String> {
         // Intentionally holds the MutexGuard across thread::sleep — see doc comment.
-        let mut guard = self.last.lock().map_err(|_| "RateLimiter mutex poisoned".to_string())?;
+        let mut guard = self
+            .last
+            .lock()
+            .map_err(|_| "RateLimiter mutex poisoned".to_string())?;
 
         if let Some(prev) = *guard {
             let elapsed = prev.elapsed();
@@ -1537,7 +1681,7 @@ impl RateLimiter {
 /// | `categories`       | Top URL / domain categories (comma-separated) |
 /// | `last_analysis_date` | Unix timestamp of the most recent scan |
 pub struct VirusTotalTransform {
-    client:       reqwest::blocking::Client,
+    client: reqwest::blocking::Client,
     rate_limiter: RateLimiter,
 }
 
@@ -1576,10 +1720,12 @@ impl VirusTotalTransform {
                     .unwrap_or(value);
                 ("domains", domain)
             }
-            t => return Err(format!(
-                "VirusTotal does not support node type '{t}'. \
+            t => {
+                return Err(format!(
+                    "VirusTotal does not support node type '{t}'. \
                  Supported: Domain, IP, IPv6, URL."
-            )),
+                ))
+            }
         };
 
         let mut url = reqwest::Url::parse("https://www.virustotal.com/api/v3")
@@ -1596,7 +1742,9 @@ impl VirusTotalTransform {
 }
 
 impl Default for VirusTotalTransform {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Transform for VirusTotalTransform {
@@ -1641,7 +1789,8 @@ impl Transform for VirusTotalTransform {
 
         // ── 5. HTTP request ───────────────────────────────────────────────────
         info!("[virustotal] querying {url}");
-        let resp = self.client
+        let resp = self
+            .client
             .get(&url)
             .header("x-apikey", &api_key)
             .send()
@@ -1650,24 +1799,26 @@ impl Transform for VirusTotalTransform {
         // ── 6. HTTP error handling ────────────────────────────────────────────
         match resp.status().as_u16() {
             200 => {}
-            401 => return Err(
-                "VirusTotal: invalid or expired API key.\n\
+            401 => {
+                return Err("VirusTotal: invalid or expired API key.\n\
                  Update it in Settings → API Keys."
-                    .into(),
-            ),
-            403 => return Err(
-                "VirusTotal: API access forbidden.\n\
+                    .into())
+            }
+            403 => {
+                return Err("VirusTotal: API access forbidden.\n\
                  Check that your key has the required permissions."
-                    .into(),
-            ),
-            404 => return Err(format!(
-                "'{value}' was not found in the VirusTotal database."
-            )),
-            429 => return Err(
-                "VirusTotal rate limit exceeded (daily or monthly quota).\n\
+                    .into())
+            }
+            404 => {
+                return Err(format!(
+                    "'{value}' was not found in the VirusTotal database."
+                ))
+            }
+            429 => {
+                return Err("VirusTotal rate limit exceeded (daily or monthly quota).\n\
                  Free accounts allow 500 requests/day and 15 500/month."
-                    .into(),
-            ),
+                    .into())
+            }
             s => return Err(format!("VirusTotal returned HTTP {s}")),
         }
 
@@ -1679,11 +1830,11 @@ impl Transform for VirusTotalTransform {
         let attrs = &body["data"]["attributes"];
         let stats = &attrs["last_analysis_stats"];
 
-        let malicious  = stats["malicious"] .as_i64().unwrap_or(0);
+        let malicious = stats["malicious"].as_i64().unwrap_or(0);
         let suspicious = stats["suspicious"].as_i64().unwrap_or(0);
-        let harmless   = stats["harmless"]  .as_i64().unwrap_or(0);
+        let harmless = stats["harmless"].as_i64().unwrap_or(0);
         let undetected = stats["undetected"].as_i64().unwrap_or(0);
-        let total      = malicious + suspicious + harmless + undetected;
+        let total = malicious + suspicious + harmless + undetected;
         let reputation = attrs["reputation"].as_i64().unwrap_or(0);
 
         let threat_label = attrs["popular_threat_classification"]["suggested_threat_label"]
@@ -1691,9 +1842,7 @@ impl Transform for VirusTotalTransform {
             .unwrap_or("")
             .to_string();
 
-        let last_analysis_date = attrs["last_analysis_date"]
-            .as_i64()
-            .unwrap_or(0);
+        let last_analysis_date = attrs["last_analysis_date"].as_i64().unwrap_or(0);
 
         // Aggregate VT categories — deduplicate and take the top 3 unique values.
         let categories: String = attrs["categories"]
@@ -1719,14 +1868,14 @@ impl Transform for VirusTotalTransform {
 
         // ── 9. Build the report node using the shared helper ──────────────────
         let mut extra: Vec<(&str, String)> = vec![
-            ("malicious",      malicious.to_string()),
-            ("suspicious",     suspicious.to_string()),
-            ("harmless",       harmless.to_string()),
-            ("undetected",     undetected.to_string()),
-            ("total_engines",  total.to_string()),
-            ("reputation",     reputation.to_string()),
-            ("verdict",        verdict.to_string()),
-            ("target",         value.clone()),
+            ("malicious", malicious.to_string()),
+            ("suspicious", suspicious.to_string()),
+            ("harmless", harmless.to_string()),
+            ("undetected", undetected.to_string()),
+            ("total_engines", total.to_string()),
+            ("reputation", reputation.to_string()),
+            ("verdict", verdict.to_string()),
+            ("target", value.clone()),
         ];
         if !threat_label.is_empty() {
             extra.push(("threat_label", threat_label));
@@ -1738,13 +1887,8 @@ impl Transform for VirusTotalTransform {
             extra.push(("last_analysis_date", last_analysis_date.to_string()));
         }
 
-        let (report_node, report_edge) = create_result_node(
-            &seed.id,
-            "VirusTotalReport",
-            &summary,
-            extra,
-            "vt-report",
-        );
+        let (report_node, report_edge) =
+            create_result_node(&seed.id, "VirusTotalReport", &summary, extra, "vt-report");
 
         info!(
             "[virustotal] {value} → verdict={verdict}, \
@@ -1778,7 +1922,10 @@ mod virustotal_tests {
     #[test]
     fn vt_api_url_ipv4() {
         let url = VirusTotalTransform::api_url("IP", "8.8.8.8").unwrap();
-        assert_eq!(url, "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8");
+        assert_eq!(
+            url,
+            "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8"
+        );
     }
 
     #[test]
@@ -1795,14 +1942,14 @@ mod virustotal_tests {
 
     #[test]
     fn vt_api_url_percent_encodes_path_injection() {
-        let url = VirusTotalTransform::api_url(
-            "Domain",
-            "evil.com/../../x?y=1#z",
-        ).unwrap();
+        let url = VirusTotalTransform::api_url("Domain", "evil.com/../../x?y=1#z").unwrap();
         // The crafted value must stay a single, encoded path segment —
         // `/`, `?` and `#` are percent-encoded so they cannot rewrite the
         // request path (`=` is a legal pchar and stays raw).
-        assert!(url.starts_with("https://www.virustotal.com/api/v3/domains/"), "{url}");
+        assert!(
+            url.starts_with("https://www.virustotal.com/api/v3/domains/"),
+            "{url}"
+        );
         assert!(url.contains("evil.com%2F..%2F..%2Fx%3Fy=1%23z"), "{url}");
         assert!(!url.contains('?'), "query must be encoded: {url}");
         assert!(!url.contains('#'), "fragment must be encoded: {url}");
@@ -1837,9 +1984,9 @@ mod virustotal_tests {
     #[test]
     fn rate_limiter_allows_first_request_immediately() {
         let rl = RateLimiter {
-            last:         Mutex::new(None),
+            last: Mutex::new(None),
             min_interval: Duration::from_secs(15),
-            max_wait:     Duration::from_secs(60),
+            max_wait: Duration::from_secs(60),
         };
         // First call: no previous timestamp, should return Ok without sleeping.
         let start = Instant::now();
@@ -1853,9 +2000,9 @@ mod virustotal_tests {
         // which is less than max_wait (60 s), so it would normally sleep.
         // Use a very low max_wait to make the test fast.
         let rl = RateLimiter {
-            last:         Mutex::new(Some(Instant::now())),
+            last: Mutex::new(Some(Instant::now())),
             min_interval: Duration::from_secs(30),
-            max_wait:     Duration::from_millis(500), // deliberately tiny
+            max_wait: Duration::from_millis(500), // deliberately tiny
         };
         let result = rl.acquire();
         assert!(result.is_err(), "should reject when wait > max_wait");

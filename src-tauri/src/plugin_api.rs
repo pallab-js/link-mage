@@ -49,8 +49,8 @@ pub const API_VERSION: u32 = 2;
 // ── Raw C-ABI function types ──────────────────────────────────────────────────
 
 type FnApiVersion = unsafe extern "C" fn() -> u32;
-type FnCStr       = unsafe extern "C" fn() -> *const c_char;
-type FnRun        = unsafe extern "C" fn(*const c_char) -> *mut c_char;
+type FnCStr = unsafe extern "C" fn() -> *const c_char;
+type FnRun = unsafe extern "C" fn(*const c_char) -> *mut c_char;
 type FnFreeString = unsafe extern "C" fn(*mut c_char);
 
 // ── Host-side metadata ────────────────────────────────────────────────────────
@@ -58,12 +58,12 @@ type FnFreeString = unsafe extern "C" fn(*mut c_char);
 /// Owned, serializable plugin metadata — safe to send to the frontend.
 #[derive(Debug, Clone, Serialize)]
 pub struct PluginMeta {
-    pub name:             String,
-    pub description:      String,
-    pub version:          String,
+    pub name: String,
+    pub description: String,
+    pub version: String,
     pub applicable_types: Vec<String>,
     /// Absolute path of the `.dylib` / `.so` / `.dll` file.
-    pub path:             PathBuf,
+    pub path: PathBuf,
 }
 
 // ── Loaded plugin ─────────────────────────────────────────────────────────────
@@ -74,11 +74,11 @@ pub struct PluginMeta {
 /// Dropping it unmaps the library — do not drop while a `run` call is in
 /// progress.
 pub struct LoadedPlugin {
-    pub meta:   PluginMeta,
+    pub meta: PluginMeta,
     // Kept alive to prevent the library from being unmapped.
-    _lib:       Library,
-    run_fn:     FnRun,
-    free_fn:    FnFreeString,
+    _lib: Library,
+    run_fn: FnRun,
+    free_fn: FnFreeString,
 }
 
 // Raw pointers from `libloading` are not `Send + Sync` by default, but they
@@ -102,14 +102,10 @@ impl LoadedPlugin {
     ///
     /// The node and graph are serialized to JSON and passed to the plugin.
     /// The plugin response is deserialized and returned as `(new_nodes, new_edges)`.
-    pub fn run(
-        &self,
-        node:  &Node,
-    ) -> Result<(Vec<Node>, Vec<Edge>), String> {
-        let node_json  = serde_json::to_string(node)
-            .map_err(|e| format!("serialize node: {e}"))?;
+    pub fn run(&self, node: &Node) -> Result<(Vec<Node>, Vec<Edge>), String> {
+        let node_json = serde_json::to_string(node).map_err(|e| format!("serialize node: {e}"))?;
 
-        let c_node  = CString::new(node_json) .map_err(|_| "node JSON has NUL")?;
+        let c_node = CString::new(node_json).map_err(|_| "node JSON has NUL")?;
 
         // SAFETY: we hold `_lib` alive, fn pointers are valid, inputs are
         // valid NUL-terminated UTF-8 strings.
@@ -121,7 +117,9 @@ impl LoadedPlugin {
 
         // Copy the string, then hand the pointer back to the plugin for
         // deallocation.  Do this before any early return so we never leak.
-        let json = unsafe { CStr::from_ptr(raw) }.to_string_lossy().into_owned();
+        let json = unsafe { CStr::from_ptr(raw) }
+            .to_string_lossy()
+            .into_owned();
         unsafe { (self.free_fn)(raw) };
 
         let resp: PluginResponse = serde_json::from_str(&json)
@@ -150,8 +148,8 @@ impl LoadedPlugin {
 /// `libloading` is inherently unsafe.  Only load plugins from trusted sources.
 pub fn load_plugin(path: &Path) -> Result<LoadedPlugin, String> {
     // SAFETY: loading arbitrary native code is always unsafe.
-    let lib = unsafe { Library::new(path) }
-        .map_err(|e| format!("dlopen '{}': {e}", path.display()))?;
+    let lib =
+        unsafe { Library::new(path) }.map_err(|e| format!("dlopen '{}': {e}", path.display()))?;
 
     // ── 1. Version gate ───────────────────────────────────────────────────────
     let plugin_ver: u32 = unsafe {
@@ -170,11 +168,11 @@ pub fn load_plugin(path: &Path) -> Result<LoadedPlugin, String> {
     }
 
     // ── 2. Metadata ───────────────────────────────────────────────────────────
-    let name        = call_static_cstr(&lib, b"plugin_name\0")?;
+    let name = call_static_cstr(&lib, b"plugin_name\0")?;
     let description = call_static_cstr(&lib, b"plugin_description\0")?;
-    let version     = call_static_cstr(&lib, b"plugin_version\0")?;
+    let version = call_static_cstr(&lib, b"plugin_version\0")?;
 
-    let types_json  = call_static_cstr(&lib, b"plugin_applicable_types\0")?;
+    let types_json = call_static_cstr(&lib, b"plugin_applicable_types\0")?;
     let applicable_types: Vec<String> = serde_json::from_str(&types_json).map_err(|e| {
         format!(
             "plugin_applicable_types in '{}' returned invalid JSON array: {e}",
@@ -201,7 +199,13 @@ pub fn load_plugin(path: &Path) -> Result<LoadedPlugin, String> {
     };
 
     Ok(LoadedPlugin {
-        meta: PluginMeta { name, description, version, applicable_types, path: path.to_path_buf() },
+        meta: PluginMeta {
+            name,
+            description,
+            version,
+            applicable_types,
+            path: path.to_path_buf(),
+        },
         _lib: lib,
         run_fn,
         free_fn,
@@ -215,9 +219,7 @@ pub fn load_plugin(path: &Path) -> Result<LoadedPlugin, String> {
 fn call_static_cstr(lib: &Library, sym: &[u8]) -> Result<String, String> {
     let name = std::str::from_utf8(&sym[..sym.len() - 1]).unwrap_or("?");
     unsafe {
-        let f: Symbol<FnCStr> = lib
-            .get(sym)
-            .map_err(|e| format!("missing '{name}': {e}"))?;
+        let f: Symbol<FnCStr> = lib.get(sym).map_err(|e| format!("missing '{name}': {e}"))?;
         let ptr = f();
         if ptr.is_null() {
             return Err(format!("'{name}' returned null"));
@@ -231,8 +233,8 @@ fn call_static_cstr(lib: &Library, sym: &[u8]) -> Result<String, String> {
 /// Result of attempting to load a single file from a plugin directory.
 #[derive(Debug, Serialize)]
 pub struct PluginLoadResult {
-    pub path:    PathBuf,
-    pub ok:      bool,
+    pub path: PathBuf,
+    pub ok: bool,
     pub message: String,
 }
 
@@ -241,18 +243,20 @@ pub struct PluginLoadResult {
 /// Files are matched by platform extension: `.dylib` (macOS), `.so` (Linux),
 /// `.dll` (Windows).  Every file is attempted; failures are captured as
 /// `PluginLoadResult` entries rather than aborting the whole scan.
-pub fn scan_plugin_dir(
-    dir: &Path,
-) -> (Vec<LoadedPlugin>, Vec<PluginLoadResult>) {
-    let ext = if cfg!(target_os = "macos")   { "dylib" }
-              else if cfg!(target_os = "windows") { "dll"   }
-              else                                { "so"    };
+pub fn scan_plugin_dir(dir: &Path) -> (Vec<LoadedPlugin>, Vec<PluginLoadResult>) {
+    let ext = if cfg!(target_os = "macos") {
+        "dylib"
+    } else if cfg!(target_os = "windows") {
+        "dll"
+    } else {
+        "so"
+    };
 
     let mut plugins = Vec::new();
     let mut results = Vec::new();
 
     let entries = match std::fs::read_dir(dir) {
-        Ok(e)  => e,
+        Ok(e) => e,
         Err(e) => {
             log::warn!("[plugin] cannot read dir '{}': {e}", dir.display());
             return (plugins, results);
@@ -274,7 +278,11 @@ pub fn scan_plugin_dir(
                 }
                 Err(e) => {
                     log::warn!("[plugin] failed to load '{}': {e}", path.display());
-                    results.push(PluginLoadResult { path, ok: false, message: e });
+                    results.push(PluginLoadResult {
+                        path,
+                        ok: false,
+                        message: e,
+                    });
                 }
             }
         }
@@ -295,7 +303,9 @@ pub struct PluginRegistry {
 }
 
 impl PluginRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Replace all currently loaded plugins with `new_plugins`.
     /// Existing `LoadedPlugin` values are dropped, unmapping their libraries.
@@ -319,7 +329,9 @@ impl PluginRegistry {
     /// Find a plugin by name (case-insensitive).
     pub fn find(&self, name: &str) -> Option<&LoadedPlugin> {
         let lower = name.to_lowercase();
-        self.plugins.iter().find(|p| p.meta.name.to_lowercase() == lower)
+        self.plugins
+            .iter()
+            .find(|p| p.meta.name.to_lowercase() == lower)
     }
 
     /// Iterate over all loaded plugins.
@@ -341,7 +353,10 @@ mod tests {
         // host → plugin: the SDK's `Node` must accept the host's JSON.
         let host_node = Node::new("Domain");
         let json = serde_json::to_string(&host_node).unwrap();
-        assert!(json.contains("\"type\""), "host must serialize as \"type\": {json}");
+        assert!(
+            json.contains("\"type\""),
+            "host must serialize as \"type\": {json}"
+        );
         let sdk_node: link_mage_plugin_sdk::Node = serde_json::from_str(&json).unwrap();
         assert_eq!(sdk_node.node_type, "Domain");
 
@@ -349,7 +364,10 @@ mod tests {
         // deserialize into the host's `Node`.
         let sdk_node = link_mage_plugin_sdk::Node::new_with_value("IP", "1.2.3.4");
         let json = serde_json::to_string(&sdk_node).unwrap();
-        assert!(json.contains("\"type\""), "SDK must serialize as \"type\": {json}");
+        assert!(
+            json.contains("\"type\""),
+            "SDK must serialize as \"type\": {json}"
+        );
         let node: Node = serde_json::from_str(&json).unwrap();
         assert_eq!(node.node_type, "IP");
         assert_eq!(node.properties["value"], "1.2.3.4");

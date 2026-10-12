@@ -31,17 +31,17 @@ pub struct TransformStep {
 #[serde(rename_all = "snake_case")]
 pub enum ProvenanceSource {
     #[default]
-    Unknown,          // Source could not be determined
-    Manual,           // User manually created the entity
-    DnsLookup,        // Created via DNS lookup transform
-    WhoisLookup,      // Created via WHOIS lookup transform
-    GeoipLookup,      // Created via GeoIP transform
-    WebScrape,        // Created via web scraping
-    Virustotal,       // Created via VirusTotal lookup
-    RemoteTransform,  // Created via remote transform
-    Plugin,           // Created via native plugin
-    Import,           // Imported from file
-    Pipeline,         // Created via transform pipeline
+    Unknown, // Source could not be determined
+    Manual,          // User manually created the entity
+    DnsLookup,       // Created via DNS lookup transform
+    WhoisLookup,     // Created via WHOIS lookup transform
+    GeoipLookup,     // Created via GeoIP transform
+    WebScrape,       // Created via web scraping
+    Virustotal,      // Created via VirusTotal lookup
+    RemoteTransform, // Created via remote transform
+    Plugin,          // Created via native plugin
+    Import,          // Imported from file
+    Pipeline,        // Created via transform pipeline
 }
 
 impl std::fmt::Display for ProvenanceSource {
@@ -151,7 +151,7 @@ impl Provenance {
             error: None,
         };
 
-        let confidence = Self::calculate_confidence(&source, &[step.clone()]);
+        let confidence = Self::calculate_confidence(&source, std::slice::from_ref(&step));
 
         Self {
             source,
@@ -201,7 +201,7 @@ impl Provenance {
         // Apply decay for each transform step (2% per step)
         let decay_factor = 0.98_f64;
         let chain_decay = decay_factor.powi(chain.len() as i32);
-        
+
         // Factor in failed transforms
         let success_rate = if chain.is_empty() {
             1.0
@@ -257,7 +257,8 @@ impl Provenance {
         });
 
         // Average confidence
-        let avg_confidence = provenances.iter().map(|p| p.confidence).sum::<f64>() / provenances.len() as f64;
+        let avg_confidence =
+            provenances.iter().map(|p| p.confidence).sum::<f64>() / provenances.len() as f64;
 
         Self {
             source: earliest.source.clone(),
@@ -281,7 +282,7 @@ impl Provenance {
         if let Ok(created_date) = DateTime::parse_from_rfc3339(&self.created_at) {
             parts.push(format!(
                 "Created: {}",
-                created_date.format("%Y-%m-%d %H:%M:%S").to_string()
+                created_date.format("%Y-%m-%d %H:%M:%S")
             ));
         }
 
@@ -300,7 +301,10 @@ impl Provenance {
 
         // Transform chain
         if !self.transform_chain.is_empty() {
-            parts.push(format!("\nTransform Chain ({} steps):", self.transform_chain.len()));
+            parts.push(format!(
+                "\nTransform Chain ({} steps):",
+                self.transform_chain.len()
+            ));
             for (i, step) in self.transform_chain.iter().enumerate() {
                 let status = if step.success { "✓" } else { "✗" };
                 let time_str = if let Ok(dt) = DateTime::parse_from_rfc3339(&step.executed_at) {
@@ -408,7 +412,7 @@ mod tests {
     #[test]
     fn test_confidence_decay() {
         let mut prov = Provenance::manual("user");
-        
+
         // Add multiple transform steps
         for i in 0..5 {
             prov = prov.add_transform_step(
@@ -419,7 +423,7 @@ mod tests {
                 None,
             );
         }
-        
+
         // Confidence should decrease with each step
         assert!(prov.confidence < 1.0);
         assert!(prov.confidence > 0.1);
@@ -438,7 +442,7 @@ mod tests {
         );
 
         let merged = Provenance::merge(&[prov1, prov2]);
-        assert!(merged.transform_chain.len() >= 1);
+        assert!(!merged.transform_chain.is_empty());
         assert_eq!(merged.notes, Some("Merged from 2 sources".to_string()));
     }
 
@@ -448,7 +452,10 @@ mod tests {
     #[test]
     fn provenance_serializes_camel_case_for_frontend() {
         let json = serde_json::to_value(Provenance::manual("tester")).unwrap();
-        assert!(json.get("createdAt").is_some(), "expected camelCase createdAt: {json}");
+        assert!(
+            json.get("createdAt").is_some(),
+            "expected camelCase createdAt: {json}"
+        );
         assert!(json.get("createdBy").is_some());
         assert!(json.get("transformChain").is_some());
         assert!(json.get("created_at").is_none());

@@ -1,16 +1,16 @@
+use crate::entities::EntityDefinition;
+use crate::graph::{Edge, Graph, Node};
+use crate::keychain;
+use crate::plugin_api::{scan_plugin_dir, PluginLoadResult};
+use crate::provenance::{Provenance, ProvenanceSource};
+use crate::state::AppState;
+use crate::transforms::{RemoteTransform, Transform};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
-use serde::Serialize;
 use tauri::{Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
-use crate::entities::EntityDefinition;
-use crate::graph::{Edge, Graph, Node};
-use crate::provenance::{Provenance, ProvenanceSource};
-use crate::transforms::{RemoteTransform, Transform};
-use crate::keychain;
-use crate::plugin_api::{scan_plugin_dir, PluginLoadResult};
-use crate::state::AppState;
 
 // ── Error type ────────────────────────────────────────────────────────────────
 
@@ -24,11 +24,11 @@ fn lock_err() -> String {
 /// Stamp provenance onto transform output nodes that don't carry their own,
 /// so every node created by a transform has a visible audit trail.
 fn stamp_provenance(
-    nodes:          &mut [Node],
-    source:         ProvenanceSource,
+    nodes: &mut [Node],
+    source: ProvenanceSource,
     source_node_id: &str,
     transform_name: &str,
-    duration_ms:    u64,
+    duration_ms: u64,
 ) {
     for n in nodes {
         if n.provenance.is_none() {
@@ -132,11 +132,7 @@ pub fn remove_node(state: State<AppState>, id: String) -> CmdResult<()> {
 #[tauri::command]
 pub fn add_edge(state: State<AppState>, mut edge: Edge) -> CmdResult<String> {
     if edge.id.is_empty() {
-        edge = Edge::new(
-            edge.source.clone(),
-            edge.target.clone(),
-            edge.label.clone(),
-        );
+        edge = Edge::new(edge.source.clone(), edge.target.clone(), edge.label.clone());
     }
     with_graph(&state, |g| {
         let id = edge.id.clone();
@@ -161,7 +157,10 @@ pub fn remove_edge(state: State<AppState>, id: String) -> CmdResult<()> {
 /// Replace the current graph with an empty one.
 #[tauri::command]
 pub fn clear_graph(state: State<AppState>) -> CmdResult<()> {
-    with_graph(&state, |g| { *g = Graph::new(); Ok(()) })
+    with_graph(&state, |g| {
+        *g = Graph::new();
+        Ok(())
+    })
 }
 
 /// Save the current graph to a path that is already known (no dialog).
@@ -206,9 +205,7 @@ pub async fn save_graph_dialog(
         match file_path {
             None => Ok(None), // user cancelled
             Some(fp) => {
-                let path = fp
-                    .into_path()
-                    .map_err(|e| format!("Invalid path: {e}"))?;
+                let path = fp.into_path().map_err(|e| format!("Invalid path: {e}"))?;
 
                 // Read lock: multiple save calls can run concurrently.
                 with_graph_ro(&app_state, |g| {
@@ -242,15 +239,15 @@ pub async fn load_graph_dialog(
         match file_path {
             None => Ok(None), // user cancelled
             Some(fp) => {
-                let path = fp
-                    .into_path()
-                    .map_err(|e| format!("Invalid path: {e}"))?;
+                let path = fp.into_path().map_err(|e| format!("Invalid path: {e}"))?;
 
-                let loaded = Graph::load_graph(&path)
-                    .map_err(|e| format!("Load failed: {e}"))?;
+                let loaded = Graph::load_graph(&path).map_err(|e| format!("Load failed: {e}"))?;
 
                 let path_str = path.to_string_lossy().into_owned();
-                with_graph(&app_state, |g| { *g = loaded.clone(); Ok(()) })?;
+                with_graph(&app_state, |g| {
+                    *g = loaded.clone();
+                    Ok(())
+                })?;
 
                 Ok(Some(LoadResult {
                     graph: loaded,
@@ -293,22 +290,19 @@ pub async fn import_csv_dialog(
                 let edges_path = dir.join("edges.csv");
 
                 if !nodes_path.exists() {
-                    return Err(format!(
-                        "nodes.csv not found in {}",
-                        dir.display()
-                    ));
+                    return Err(format!("nodes.csv not found in {}", dir.display()));
                 }
                 if !edges_path.exists() {
-                    return Err(format!(
-                        "edges.csv not found in {}",
-                        dir.display()
-                    ));
+                    return Err(format!("edges.csv not found in {}", dir.display()));
                 }
 
                 let imported = Graph::import_csv(&nodes_path, &edges_path)
                     .map_err(|e| format!("CSV import failed: {e}"))?;
 
-                with_graph(&app_state, |g| { *g = imported.clone(); Ok(()) })?;
+                with_graph(&app_state, |g| {
+                    *g = imported.clone();
+                    Ok(())
+                })?;
 
                 Ok(Some(imported))
             }
@@ -339,9 +333,7 @@ pub async fn export_graphml_dialog(
         match file_path {
             None => Ok(None),
             Some(fp) => {
-                let path = fp
-                    .into_path()
-                    .map_err(|e| format!("Invalid path: {e}"))?;
+                let path = fp.into_path().map_err(|e| format!("Invalid path: {e}"))?;
 
                 with_graph_ro(&app_state, |g| {
                     g.export_graphml(&path)
@@ -404,11 +396,11 @@ pub async fn export_csv_dialog(
 /// transforms loaded from an external `.dylib` / `.so` / `.dll`.
 #[derive(Serialize, Clone)]
 pub struct TransformInfo {
-    pub name:             String,
-    pub description:      String,
+    pub name: String,
+    pub description: String,
     pub applicable_types: Vec<String>,
     /// Absolute path of the plugin file, or `None` for built-in transforms.
-    pub plugin_path:      Option<String>,
+    pub plugin_path: Option<String>,
 }
 
 /// What a successful `run_transform` call returns.
@@ -428,7 +420,10 @@ pub struct TransformResult {
 /// The frontend calls this once on mount to build per-node-type context menus.
 /// `plugin_path` distinguishes built-in (`null`) from external transforms.
 fn save_remote_transforms(app: &tauri::AppHandle, remote: &[RemoteTransform]) -> CmdResult<()> {
-    let base = app.path().app_data_dir().map_err(|e: tauri::Error| e.to_string())?;
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|e: tauri::Error| e.to_string())?;
     let path = base.join("remote_transforms.json");
     let json = serde_json::to_string_pretty(remote).map_err(|e| e.to_string())?;
     std::fs::write(path, json).map_err(|e| e.to_string())?;
@@ -442,10 +437,16 @@ pub fn add_remote_transform(
     state: State<AppState>,
     transform: RemoteTransform,
 ) -> CmdResult<()> {
-    let mut remote = state.remote_transforms.write().map_err(|_| "Remote registry poisoned")?;
+    let mut remote = state
+        .remote_transforms
+        .write()
+        .map_err(|_| "Remote registry poisoned")?;
     // Check for name collision
     if remote.iter().any(|r| r.name == transform.name) {
-        return Err(format!("Transform with name '{}' already exists", transform.name));
+        return Err(format!(
+            "Transform with name '{}' already exists",
+            transform.name
+        ));
     }
     remote.push(transform);
     save_remote_transforms(&app, &remote)?;
@@ -459,8 +460,13 @@ pub fn remove_remote_transform(
     state: State<AppState>,
     name: String,
 ) -> CmdResult<()> {
-    let mut remote = state.remote_transforms.write().map_err(|_| "Remote registry poisoned")?;
-    let pos = remote.iter().position(|r| r.name == name)
+    let mut remote = state
+        .remote_transforms
+        .write()
+        .map_err(|_| "Remote registry poisoned")?;
+    let pos = remote
+        .iter()
+        .position(|r| r.name == name)
         .ok_or_else(|| format!("Remote transform '{}' not found", name))?;
     remote.remove(pos);
     save_remote_transforms(&app, &remote)?;
@@ -470,7 +476,10 @@ pub fn remove_remote_transform(
 /// List all remote (HTTP) transforms.
 #[tauri::command]
 pub fn list_remote_transforms(state: State<AppState>) -> CmdResult<Vec<RemoteTransform>> {
-    let remote = state.remote_transforms.read().map_err(|_| "Remote registry poisoned")?;
+    let remote = state
+        .remote_transforms
+        .read()
+        .map_err(|_| "Remote registry poisoned")?;
     Ok(remote.clone())
 }
 
@@ -481,32 +490,38 @@ pub fn list_transforms(state: State<AppState>) -> CmdResult<Vec<TransformInfo>> 
         .all()
         .iter()
         .map(|t| TransformInfo {
-            name:             t.name(),
-            description:      t.description(),
+            name: t.name(),
+            description: t.description(),
             applicable_types: t.applicable_types(),
-            plugin_path:      None,
+            plugin_path: None,
         })
         .collect();
 
     // Append plugin transforms.
-    let plugins = state.plugins.read().map_err(|_| "Plugin registry poisoned")?;
+    let plugins = state
+        .plugins
+        .read()
+        .map_err(|_| "Plugin registry poisoned")?;
     for p in plugins.all() {
         infos.push(TransformInfo {
-            name:             p.meta.name.clone(),
-            description:      p.meta.description.clone(),
+            name: p.meta.name.clone(),
+            description: p.meta.description.clone(),
             applicable_types: p.meta.applicable_types.clone(),
-            plugin_path:      Some(p.meta.path.to_string_lossy().into_owned()),
+            plugin_path: Some(p.meta.path.to_string_lossy().into_owned()),
         });
     }
 
     // Append remote transforms.
-    let remote = state.remote_transforms.read().map_err(|_| "Remote registry poisoned")?;
+    let remote = state
+        .remote_transforms
+        .read()
+        .map_err(|_| "Remote registry poisoned")?;
     for r in remote.iter() {
         infos.push(TransformInfo {
-            name:             r.name.clone(),
-            description:      r.description.clone(),
+            name: r.name.clone(),
+            description: r.description.clone(),
             applicable_types: r.applicable_types.clone(),
-            plugin_path:      Some(r.url.clone()),
+            plugin_path: Some(r.url.clone()),
         });
     }
 
@@ -534,14 +549,18 @@ pub fn list_machines(state: State<'_, AppState>) -> Vec<crate::transforms::Machi
 /// executed, and the results are committed to the graph.
 #[tauri::command]
 pub async fn run_machine(
-    state:          State<'_, AppState>,
-    node_id:        String,
-    machine_name:   String,
+    state: State<'_, AppState>,
+    node_id: String,
+    machine_name: String,
 ) -> CmdResult<MachineResult> {
     let app_state = (*state).clone();
     tauri::async_runtime::spawn_blocking(move || {
         let state = app_state;
-        let machine = state.registry.machines.machines.iter()
+        let machine = state
+            .registry
+            .machines
+            .machines
+            .iter()
             .find(|m| m.name == machine_name)
             .ok_or_else(|| format!("Machine '{}' not found", machine_name))?;
 
@@ -574,7 +593,11 @@ pub async fn run_machine(
             // Step 2: Check applicability
             let types = transform.applicable_types();
             if !types.is_empty() && !types.contains(&seed.node_type) {
-                log::info!("[machine] skipping '{}' — not applicable to {}", transform_name, seed.node_type);
+                log::info!(
+                    "[machine] skipping '{}' — not applicable to {}",
+                    transform_name,
+                    seed.node_type
+                );
                 continue;
             }
 
@@ -594,21 +617,34 @@ pub async fn run_machine(
                     {
                         let mut graph = state.graph.write().map_err(|_| lock_err())?;
                         for n in &new_nodes {
-                            if graph.add_node(n.clone()) { total_nodes.push(n.clone()); }
+                            if graph.add_node(n.clone()) {
+                                total_nodes.push(n.clone());
+                            }
                         }
                         for e in &new_edges {
-                            if graph.add_edge(e.clone()) { total_edges.push(e.clone()); }
+                            if graph.add_edge(e.clone()) {
+                                total_edges.push(e.clone());
+                            }
                         }
                     }
                 }
                 Err(e) => {
-                    log::warn!("[machine] '{}' step '{}' failed: {}", machine_name, transform_name, e);
+                    log::warn!(
+                        "[machine] '{}' step '{}' failed: {}",
+                        machine_name,
+                        transform_name,
+                        e
+                    );
                     errors.push(format!("{transform_name}: {e}"));
                 }
             }
         }
 
-        Ok(MachineResult { new_nodes: total_nodes, new_edges: total_edges, errors })
+        Ok(MachineResult {
+            new_nodes: total_nodes,
+            new_edges: total_edges,
+            errors,
+        })
     })
     .await
     .map_err(|e| format!("Machine thread panicked: {}", e))?
@@ -629,7 +665,7 @@ pub async fn run_machine(
 /// `Err` — partial success is valid.
 #[tauri::command]
 pub fn load_plugins_dir(
-    app:   tauri::AppHandle,
+    app: tauri::AppHandle,
     state: State<AppState>,
 ) -> CmdResult<Vec<PluginLoadResult>> {
     use tauri::Manager;
@@ -650,7 +686,10 @@ pub fn load_plugins_dir(
 
     let (loaded, results) = scan_plugin_dir(&plugin_dir);
 
-    let mut reg = state.plugins.write().map_err(|_| "Plugin registry poisoned")?;
+    let mut reg = state
+        .plugins
+        .write()
+        .map_err(|_| "Plugin registry poisoned")?;
     reg.extend(loaded);
 
     Ok(results)
@@ -670,8 +709,8 @@ pub fn load_plugins_dir(
 /// needs to re-fetch the whole graph after a transform.
 #[tauri::command]
 pub async fn run_transform(
-    state:          State<'_, AppState>,
-    node_id:        String,
+    state: State<'_, AppState>,
+    node_id: String,
     transform_name: String,
 ) -> CmdResult<TransformResult> {
     let app_state = (*state).clone();
@@ -682,7 +721,8 @@ pub async fn run_transform(
         // ── Step 1: Resolve seed node under read lock ────────────────────────
         let seed = {
             let graph = state.graph.read().map_err(|_| lock_err())?;
-            graph.find_node(&node_id)
+            graph
+                .find_node(&node_id)
                 .cloned()
                 .ok_or_else(|| format!("Node '{node_id}' not found"))?
         };
@@ -691,14 +731,25 @@ pub async fn run_transform(
         // ── Step 2: Dispatch and run with NO lock ─────────────────────────────
         let ((mut new_nodes, new_edges_raw), provenance_source) =
             if let Some(transform) = state.registry.find(&transform_name) {
-                (transform.run(&seed)?, ProvenanceSource::from(transform_name.as_str()))
+                (
+                    transform.run(&seed)?,
+                    ProvenanceSource::from(transform_name.as_str()),
+                )
             } else {
-                let plugins = state.plugins.read().map_err(|_| "Plugin registry poisoned")?;
+                let plugins = state
+                    .plugins
+                    .read()
+                    .map_err(|_| "Plugin registry poisoned")?;
                 if let Some(plugin) = plugins.find(&transform_name) {
                     (plugin.run(&seed)?, ProvenanceSource::Plugin)
                 } else {
-                    let remote = state.remote_transforms.read().map_err(|_| "Remote registry poisoned")?;
-                    let rt = remote.iter().find(|r| r.name == transform_name)
+                    let remote = state
+                        .remote_transforms
+                        .read()
+                        .map_err(|_| "Remote registry poisoned")?;
+                    let rt = remote
+                        .iter()
+                        .find(|r| r.name == transform_name)
                         .ok_or_else(|| format!("Unknown transform: '{transform_name}'"))?;
                     (rt.run(&seed)?, ProvenanceSource::RemoteTransform)
                 }
@@ -732,11 +783,19 @@ pub async fn run_transform(
         log::info!(
             "[transform] '{}' on '{}' — find {:?} | run {:?} | total {:?} \
              | +{} nodes +{} edges",
-            transform_name, node_id, t_clone, t_run - t_clone, t0.elapsed(),
-            committed_nodes.len(), committed_edges.len(),
+            transform_name,
+            node_id,
+            t_clone,
+            t_run - t_clone,
+            t0.elapsed(),
+            committed_nodes.len(),
+            committed_edges.len(),
         );
 
-        Ok(TransformResult { new_nodes: committed_nodes, new_edges: committed_edges })
+        Ok(TransformResult {
+            new_nodes: committed_nodes,
+            new_edges: committed_edges,
+        })
     })
     .await
     .map_err(|e| format!("Transform thread panicked: {}", e))?
@@ -746,12 +805,12 @@ pub async fn run_transform(
 /// All edges incident to the original nodes are re-routed to the collection node.
 #[tauri::command]
 pub fn collapse_nodes(
-    state:   State<'_, AppState>,
-    ids:     Vec<String>,
-    label:   String,
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+    label: String,
 ) -> CmdResult<Node> {
     let mut graph = state.graph.write().map_err(|_| lock_err())?;
-    graph.collapse_nodes(&ids, &label).map_err(|e| e)
+    graph.collapse_nodes(&ids, &label)
 }
 
 // ── Keychain / API-key commands ───────────────────────────────────────────────
@@ -772,40 +831,38 @@ pub fn collapse_nodes(
 #[derive(Serialize, Clone)]
 pub struct ApiServiceInfo {
     /// Keychain account identifier (e.g. `"virustotal"`).
-    pub id:          String,
+    pub id: String,
     /// Human-readable display name (e.g. `"VirusTotal"`).
-    pub name:        String,
+    pub name: String,
     /// Short description shown below the name in the Settings panel.
     pub description: String,
     /// URL where the user can create/find their API key.
-    pub key_url:     String,
+    pub key_url: String,
     /// Whether a key is currently stored in the keychain.
-    pub has_key:     bool,
+    pub has_key: bool,
 }
 
 /// Return metadata for all known API services, including whether a key is
 /// stored for each.  Used by the Settings panel to populate the list.
 #[tauri::command]
 pub fn list_api_services() -> CmdResult<Vec<ApiServiceInfo>> {
-    let services = [
-        (
-            keychain::VIRUSTOTAL,
-            "VirusTotal",
-            "Malware & URL reputation analysis (4 requests/min on free tier)",
-            "https://www.virustotal.com/gui/user/settings/apikey",
-        ),
-    ];
+    let services = [(
+        keychain::VIRUSTOTAL,
+        "VirusTotal",
+        "Malware & URL reputation analysis (4 requests/min on free tier)",
+        "https://www.virustotal.com/gui/user/settings/apikey",
+    )];
 
     services
         .iter()
         .map(|(id, name, desc, url)| {
-            let has_key = keychain::has_key(id)
-                .map_err(|e| format!("Keychain error for '{id}': {e}"))?;
+            let has_key =
+                keychain::has_key(id).map_err(|e| format!("Keychain error for '{id}': {e}"))?;
             Ok(ApiServiceInfo {
-                id:          id.to_string(),
-                name:        name.to_string(),
+                id: id.to_string(),
+                name: name.to_string(),
                 description: desc.to_string(),
-                key_url:     url.to_string(),
+                key_url: url.to_string(),
                 has_key,
             })
         })
@@ -823,7 +880,7 @@ pub fn check_api_key(service: String) -> CmdResult<bool> {
 /// Returns `Some(key)` if present, `None` if the user has not set one.
 #[tauri::command]
 pub fn get_api_key(service: String) -> CmdResult<Option<String>> {
-    keychain::get_key(&service).map_err(|e| e)
+    keychain::get_key(&service)
 }
 
 /// Store `key` for `service` in the platform keychain.
@@ -833,16 +890,15 @@ pub fn set_api_key(service: String, key: String) -> CmdResult<()> {
     if key.trim().is_empty() {
         return Err("API key must not be empty".into());
     }
-    keychain::set_key(&service, key.trim()).map_err(|e| e)
+    keychain::set_key(&service, key.trim())
 }
 
 /// Delete the stored API key for `service`.
 /// Deleting a non-existent key is a no-op.
 #[tauri::command]
 pub fn delete_api_key(service: String) -> CmdResult<()> {
-    keychain::delete_key(&service).map_err(|e| e)
+    keychain::delete_key(&service)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -862,7 +918,10 @@ mod tests {
             42,
         );
 
-        let stamped = nodes[0].provenance.as_ref().expect("fresh node must get provenance");
+        let stamped = nodes[0]
+            .provenance
+            .as_ref()
+            .expect("fresh node must get provenance");
         assert_eq!(stamped.source, ProvenanceSource::DnsLookup);
         assert_eq!(stamped.transform_chain[0].transform_name, "DNS Lookup");
         assert_eq!(stamped.transform_chain[0].source_node_id, "seed-1");

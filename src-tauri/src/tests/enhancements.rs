@@ -1,5 +1,5 @@
 //! Automated Tests for Link Mage Enhancements
-//! 
+//!
 //! Tests for: Provenance
 
 // ── Provenance Tests ──────────────────────────────────────────────────────────
@@ -11,7 +11,7 @@ mod provenance_tests {
     #[test]
     fn test_manual_provenance_creation() {
         let prov = Provenance::manual("test_user");
-        
+
         assert_eq!(prov.source, ProvenanceSource::Manual);
         assert_eq!(prov.created_by, "test_user");
         assert_eq!(prov.confidence, 1.0);
@@ -41,29 +41,53 @@ mod provenance_tests {
 
     #[test]
     fn test_confidence_by_source() {
-        assert_eq!(Provenance::source_reliability(&ProvenanceSource::Manual), 1.0);
-        assert_eq!(Provenance::source_reliability(&ProvenanceSource::DnsLookup), 0.95);
-        assert_eq!(Provenance::source_reliability(&ProvenanceSource::WhoisLookup), 0.90);
-        assert_eq!(Provenance::source_reliability(&ProvenanceSource::GeoipLookup), 0.85);
-        assert_eq!(Provenance::source_reliability(&ProvenanceSource::WebScrape), 0.75);
-        assert_eq!(Provenance::source_reliability(&ProvenanceSource::Virustotal), 0.95);
-        assert_eq!(Provenance::source_reliability(&ProvenanceSource::RemoteTransform), 0.70);
-        assert_eq!(Provenance::source_reliability(&ProvenanceSource::Plugin), 0.80);
-        assert_eq!(Provenance::source_reliability(&ProvenanceSource::Import), 0.85);
-        assert_eq!(Provenance::source_reliability(&ProvenanceSource::Unknown), 0.50);
+        assert_eq!(
+            Provenance::source_reliability(&ProvenanceSource::Manual),
+            1.0
+        );
+        assert_eq!(
+            Provenance::source_reliability(&ProvenanceSource::DnsLookup),
+            0.95
+        );
+        assert_eq!(
+            Provenance::source_reliability(&ProvenanceSource::WhoisLookup),
+            0.90
+        );
+        assert_eq!(
+            Provenance::source_reliability(&ProvenanceSource::GeoipLookup),
+            0.85
+        );
+        assert_eq!(
+            Provenance::source_reliability(&ProvenanceSource::WebScrape),
+            0.75
+        );
+        assert_eq!(
+            Provenance::source_reliability(&ProvenanceSource::Virustotal),
+            0.95
+        );
+        assert_eq!(
+            Provenance::source_reliability(&ProvenanceSource::RemoteTransform),
+            0.70
+        );
+        assert_eq!(
+            Provenance::source_reliability(&ProvenanceSource::Plugin),
+            0.80
+        );
+        assert_eq!(
+            Provenance::source_reliability(&ProvenanceSource::Import),
+            0.85
+        );
+        assert_eq!(
+            Provenance::source_reliability(&ProvenanceSource::Unknown),
+            0.50
+        );
     }
 
     #[test]
     fn test_add_transform_step() {
         let mut prov = Provenance::manual("user");
-        
-        prov = prov.add_transform_step(
-            "DNS Lookup",
-            "node_123",
-            Some(100),
-            true,
-            None,
-        );
+
+        prov = prov.add_transform_step("DNS Lookup", "node_123", Some(100), true, None);
 
         assert_eq!(prov.transform_chain.len(), 1);
         assert_eq!(prov.transform_chain[0].transform_name, "DNS Lookup");
@@ -103,7 +127,10 @@ mod provenance_tests {
         );
 
         assert!(!updated.transform_chain[0].success);
-        assert_eq!(updated.transform_chain[0].error, Some("Connection timeout".to_string()));
+        assert_eq!(
+            updated.transform_chain[0].error,
+            Some("Connection timeout".to_string())
+        );
     }
 
     #[test]
@@ -120,7 +147,7 @@ mod provenance_tests {
 
         let merged = Provenance::merge(&[prov1.clone(), prov2.clone()]);
 
-        assert!(merged.transform_chain.len() >= 1);
+        assert!(!merged.transform_chain.is_empty());
         assert_eq!(merged.notes, Some("Merged from 2 sources".to_string()));
         assert!(merged.confidence > 0.0);
     }
@@ -148,12 +175,12 @@ mod provenance_tests {
     #[test]
     fn test_provenance_tracker() {
         let tracker = ProvenanceTracker::new("DNS Lookup", "node_123");
-        
+
         // Simulate some work
         std::thread::sleep(std::time::Duration::from_millis(10));
-        
+
         assert!(tracker.duration_ms() >= 10);
-        
+
         let prov = tracker.create_success_provenance(
             ProvenanceSource::DnsLookup,
             "system",
@@ -161,17 +188,32 @@ mod provenance_tests {
         );
 
         assert_eq!(prov.source, ProvenanceSource::DnsLookup);
-        assert!(prov.transform_chain.len() >= 1);
+        assert!(!prov.transform_chain.is_empty());
     }
 
     #[test]
     fn test_provenance_source_from_str() {
         assert_eq!(ProvenanceSource::from("manual"), ProvenanceSource::Manual);
-        assert_eq!(ProvenanceSource::from("dns_lookup"), ProvenanceSource::DnsLookup);
-        assert_eq!(ProvenanceSource::from("whois"), ProvenanceSource::WhoisLookup);
-        assert_eq!(ProvenanceSource::from("geoip"), ProvenanceSource::GeoipLookup);
-        assert_eq!(ProvenanceSource::from("virustotal"), ProvenanceSource::Virustotal);
-        assert_eq!(ProvenanceSource::from("unknown_source"), ProvenanceSource::Unknown);
+        assert_eq!(
+            ProvenanceSource::from("dns_lookup"),
+            ProvenanceSource::DnsLookup
+        );
+        assert_eq!(
+            ProvenanceSource::from("whois"),
+            ProvenanceSource::WhoisLookup
+        );
+        assert_eq!(
+            ProvenanceSource::from("geoip"),
+            ProvenanceSource::GeoipLookup
+        );
+        assert_eq!(
+            ProvenanceSource::from("virustotal"),
+            ProvenanceSource::Virustotal
+        );
+        assert_eq!(
+            ProvenanceSource::from("unknown_source"),
+            ProvenanceSource::Unknown
+        );
     }
 
     #[test]
@@ -182,13 +224,12 @@ mod provenance_tests {
     }
 }
 
-
 // ── Integration Tests ────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod integration_tests {
+    use crate::graph::{Edge, Node};
     use crate::provenance::Provenance;
-    use crate::graph::{Node, Edge};
 
     #[test]
     fn test_node_with_provenance() {
@@ -228,6 +269,9 @@ mod integration_tests {
 
         let deserialized: Provenance = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.source, prov.source);
-        assert_eq!(deserialized.transform_chain.len(), prov.transform_chain.len());
+        assert_eq!(
+            deserialized.transform_chain.len(),
+            prov.transform_chain.len()
+        );
     }
 }

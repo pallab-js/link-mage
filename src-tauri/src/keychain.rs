@@ -27,9 +27,9 @@ fn entry(account: &str) -> Result<Entry, String> {
 /// set, or `Err(msg)` on a platform keychain error.
 pub fn get_key(account: &str) -> Result<Option<String>, String> {
     match entry(account)?.get_password() {
-        Ok(pw)                  => Ok(Some(pw)),
+        Ok(pw) => Ok(Some(pw)),
         Err(KeyringError::NoEntry) => Ok(None),
-        Err(e)                  => Err(format!("Keychain read error: {e}")),
+        Err(e) => Err(format!("Keychain read error: {e}")),
     }
 }
 
@@ -43,18 +43,18 @@ pub fn set_key(account: &str, key: &str) -> Result<(), String> {
 /// Delete the key for `account`.  Deleting a non-existent entry is a no-op.
 pub fn delete_key(account: &str) -> Result<(), String> {
     match entry(account)?.delete_credential() {
-        Ok(())                  => Ok(()),
+        Ok(()) => Ok(()),
         Err(KeyringError::NoEntry) => Ok(()),
-        Err(e)                  => Err(format!("Keychain delete error: {e}")),
+        Err(e) => Err(format!("Keychain delete error: {e}")),
     }
 }
 
 /// Check whether a key is stored for `account` without returning the value.
 pub fn has_key(account: &str) -> Result<bool, String> {
     match entry(account)?.get_password() {
-        Ok(_)                   => Ok(true),
+        Ok(_) => Ok(true),
         Err(KeyringError::NoEntry) => Ok(false),
-        Err(e)                  => Err(format!("Keychain check error: {e}")),
+        Err(e) => Err(format!("Keychain check error: {e}")),
     }
 }
 
