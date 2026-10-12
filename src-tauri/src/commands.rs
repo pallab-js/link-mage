@@ -260,6 +260,19 @@ pub async fn load_graph_dialog(
     .map_err(|e| format!("Dialog thread panicked: {e}"))?
 }
 
+/// Load the bundled demo graph, replacing the current one (no file dialog).
+/// Used by the sidebar "Demo Graph" button to showcase the app.
+#[tauri::command]
+pub fn load_demo_graph(state: State<'_, AppState>) -> CmdResult<Graph> {
+    let graph: Graph = serde_json::from_str(include_str!("../demo.graph.json"))
+        .map_err(|e| format!("Demo graph invalid: {e}"))?;
+    with_graph(&state, |g| {
+        *g = graph.clone();
+        Ok(())
+    })?;
+    Ok(graph)
+}
+
 // ── CSV export command ────────────────────────────────────────────────────────
 
 /// Open a folder-picker dialog, look for `nodes.csv` + `edges.csv` inside,
@@ -903,6 +916,23 @@ pub fn delete_api_key(service: String) -> CmdResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The bundled demo graph must stay loadable and well-formed: every edge
+    /// endpoint has to reference a node that exists.
+    #[test]
+    fn demo_graph_is_valid() {
+        let g: Graph = serde_json::from_str(include_str!("../demo.graph.json"))
+            .expect("demo.graph.json must deserialize into a Graph");
+        assert!(g.nodes.len() >= 10, "demo should showcase many node types");
+        for e in &g.edges {
+            assert!(
+                g.nodes.iter().any(|n| n.id == e.source)
+                    && g.nodes.iter().any(|n| n.id == e.target),
+                "edge '{}' references a missing node",
+                e.id
+            );
+        }
+    }
 
     #[test]
     fn stamp_provenance_fills_missing_and_keeps_existing() {

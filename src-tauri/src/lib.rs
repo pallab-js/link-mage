@@ -33,6 +33,7 @@ use commands::{
     list_remote_transforms,
     // transforms
     list_transforms,
+    load_demo_graph,
     load_graph_dialog,
     // plugins
     load_plugins_dir,
@@ -138,6 +139,7 @@ pub fn run() {
             // file I/O
             save_graph_dialog,
             save_graph_to_path,
+            load_demo_graph,
             load_graph_dialog,
             export_csv_dialog,
             export_graphml_dialog,

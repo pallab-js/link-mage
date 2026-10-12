@@ -125,6 +125,23 @@ export async function loadGraph(): Promise<boolean> {
 }
 
 /**
+ * Load the bundled demo graph (replaces the current graph, no dialog).
+ * Does not touch currentFilePath, so a later Ctrl+S still prompts Save As.
+ */
+export async function loadDemo(): Promise<boolean> {
+  try {
+    const g: Graph = await invoke('load_demo_graph');
+    graphStore.setGraph(g);
+    selectionStore.set(null);
+    setStatus('success', `Demo graph loaded — ${g.nodes.length} nodes, ${g.edges.length} edges`);
+    return true;
+  } catch (e) {
+    setStatus('error', String(e));
+    return false;
+  }
+}
+
+/**
  * Delete whichever nodes or edges are currently selected.
  * Updates both the backend state and the frontend store.
  */

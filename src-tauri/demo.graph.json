@@ -1,0 +1,190 @@
+{
+  "nodes": [
+    {
+      "id": "seed",
+      "type": "Domain",
+      "properties": { "value": "acme-secure-login.com", "label": "Phishing domain", "registrar": "PrivacyGuard Domains LLC", "created_date": "2026-09-28" },
+      "provenance": { "source": "manual", "createdAt": "2026-10-11T09:00:00Z", "createdBy": "analyst", "transformChain": [], "confidence": 1.0, "notes": "Seed entity reported by ACME Corp SOC" }
+    },
+    {
+      "id": "ip1",
+      "type": "IP",
+      "properties": { "value": "203.0.113.45", "label": "Seed name server", "asn": "AS64500", "country": "RO" },
+      "provenance": {
+        "source": "dns_lookup",
+        "createdAt": "2026-10-11T09:02:11Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "DNS Lookup", "executedAt": "2026-10-11T09:02:11Z", "sourceNodeId": "seed", "durationMs": 84, "success": true }
+        ],
+        "confidence": 0.95
+      }
+    },
+    {
+      "id": "domain2",
+      "type": "Domain",
+      "properties": { "value": "acme-secure-login.top", "label": "Second-stage phishing domain", "registrar": "PrivacyGuard Domains LLC", "created_date": "2026-09-30" },
+      "provenance": {
+        "source": "whois_lookup",
+        "createdAt": "2026-10-11T09:05:40Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "WHOIS", "executedAt": "2026-10-11T09:05:40Z", "sourceNodeId": "seed", "durationMs": 412, "success": true }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "ip2",
+      "type": "IP",
+      "properties": { "value": "203.0.113.66", "label": "Payload C2", "asn": "AS64500", "country": "RO" },
+      "provenance": {
+        "source": "dns_lookup",
+        "createdAt": "2026-10-11T09:06:02Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "DNS Lookup", "executedAt": "2026-10-11T09:06:02Z", "sourceNodeId": "domain2", "durationMs": 71, "success": true }
+        ],
+        "confidence": 0.95
+      }
+    },
+    {
+      "id": "org",
+      "type": "Organisation",
+      "properties": { "value": "PrivacyGuard Domains LLC", "label": "Registrant front company", "jurisdiction": "PA" },
+      "provenance": {
+        "source": "whois_lookup",
+        "createdAt": "2026-10-11T09:05:41Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "WHOIS", "executedAt": "2026-10-11T09:05:41Z", "sourceNodeId": "seed", "durationMs": 412, "success": true }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "person",
+      "type": "Person",
+      "properties": { "value": "John Q. Regrant", "label": "Registrant name", "alias": "jqr" },
+      "provenance": {
+        "source": "whois_lookup",
+        "createdAt": "2026-10-11T09:05:42Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "WHOIS", "executedAt": "2026-10-11T09:05:42Z", "sourceNodeId": "seed", "durationMs": 412, "success": true }
+        ],
+        "confidence": 0.85
+      }
+    },
+    {
+      "id": "email",
+      "type": "Email",
+      "properties": { "value": "j.regrant@privacyguard-domains.example", "label": "Registrant contact email" },
+      "provenance": {
+        "source": "whois_lookup",
+        "createdAt": "2026-10-11T09:05:43Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "WHOIS", "executedAt": "2026-10-11T09:05:43Z", "sourceNodeId": "seed", "durationMs": 412, "success": true }
+        ],
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "url1",
+      "type": "URL",
+      "properties": { "value": "https://acme-secure-login.com/wp-login.php", "label": "Credential harvesting page", "title": "ACME Employee Portal - Sign In" },
+      "provenance": {
+        "source": "web_scrape",
+        "createdAt": "2026-10-11T09:10:18Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "Scrape Webpage", "executedAt": "2026-10-11T09:10:18Z", "sourceNodeId": "seed", "durationMs": 1240, "success": true }
+        ],
+        "confidence": 0.75
+      }
+    },
+    {
+      "id": "hash",
+      "type": "Hash",
+      "properties": { "value": "d41d8cd98f00b204e9800998ecf8427e9a3c45d8b21f9a76f0e2b3c4d5e6f708", "label": "Phishing kit loader", "sha256": "d41d8cd98f00b204e9800998ecf8427e9a3c45d8b21f9a76f0e2b3c4d5e6f708", "detections": "41/72" },
+      "provenance": {
+        "source": "virustotal",
+        "createdAt": "2026-10-11T09:14:55Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "VirusTotal Lookup", "executedAt": "2026-10-11T09:14:55Z", "sourceNodeId": "url1", "durationMs": 2130, "success": true }
+        ],
+        "confidence": 0.95,
+        "externalRef": "vt:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+      }
+    },
+    {
+      "id": "ip3",
+      "type": "IP",
+      "properties": { "value": "198.51.100.23", "label": "Payload download server", "asn": "AS64512", "country": "MD" },
+      "provenance": {
+        "source": "virustotal",
+        "createdAt": "2026-10-11T09:14:57Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "VirusTotal Lookup", "executedAt": "2026-10-11T09:14:57Z", "sourceNodeId": "hash", "durationMs": 2130, "success": true }
+        ],
+        "confidence": 0.95
+      }
+    },
+    {
+      "id": "location",
+      "type": "Location",
+      "properties": { "value": "Bucharest, Romania", "label": "Hosting location", "lat": "44.4268", "lon": "26.1025" },
+      "provenance": {
+        "source": "geoip_lookup",
+        "createdAt": "2026-10-11T09:16:30Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "GeoIP Lookup", "executedAt": "2026-10-11T09:16:30Z", "sourceNodeId": "ip2", "durationMs": 12, "success": true }
+        ],
+        "confidence": 0.85
+      }
+    },
+    {
+      "id": "social",
+      "type": "SocialProfile",
+      "properties": { "value": "@acme_support", "label": "Lure account on X", "platform": "x" },
+      "provenance": {
+        "source": "web_scrape",
+        "createdAt": "2026-10-11T09:18:04Z",
+        "createdBy": "system",
+        "transformChain": [
+          { "transformName": "Scrape Webpage", "executedAt": "2026-10-11T09:18:04Z", "sourceNodeId": "seed", "durationMs": 980, "success": true }
+        ],
+        "confidence": 0.7,
+        "notes": "Bio links to the phishing domain"
+      }
+    },
+    {
+      "id": "crypto",
+      "type": "CryptocurrencyAddress",
+      "properties": { "value": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh", "label": "Drain address (BTC)", "chain": "bitcoin" },
+      "provenance": { "source": "manual", "createdAt": "2026-10-11T09:22:00Z", "createdBy": "analyst", "transformChain": [], "confidence": 1.0, "notes": "Pasted by victim assistance team" }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "seed", "target": "ip1", "label": "resolves-to", "properties": {} },
+    { "id": "e2", "source": "seed", "target": "url1", "label": "serves", "properties": {} },
+    { "id": "e3", "source": "seed", "target": "org", "label": "registered-to", "properties": {} },
+    { "id": "e4", "source": "seed", "target": "domain2", "label": "related-to", "properties": { "note": "same registrant" } },
+    { "id": "e5", "source": "seed", "target": "social", "label": "advertised-by", "properties": {} },
+    { "id": "e6", "source": "domain2", "target": "ip2", "label": "resolves-to", "properties": {} },
+    { "id": "e7", "source": "org", "target": "person", "label": "operated-by", "properties": {} },
+    { "id": "e8", "source": "person", "target": "email", "label": "contact-at", "properties": {} },
+    { "id": "e9", "source": "url1", "target": "hash", "label": "drops", "properties": {} },
+    { "id": "e10", "source": "hash", "target": "ip3", "label": "downloaded-from", "properties": {} },
+    { "id": "e11", "source": "hash", "target": "ip2", "label": "communicates-with", "properties": {} },
+    { "id": "e12", "source": "ip2", "target": "location", "label": "geolocated-at", "properties": {} },
+    { "id": "e13", "source": "ip1", "target": "location", "label": "geolocated-at", "properties": {} },
+    { "id": "e14", "source": "social", "target": "person", "label": "linked-to", "properties": {} },
+    { "id": "e15", "source": "crypto", "target": "person", "label": "controlled-by", "properties": {} },
+    { "id": "e16", "source": "ip3", "target": "location", "label": "geolocated-at", "properties": {} }
+  ]
+}

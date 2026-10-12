@@ -13,7 +13,7 @@
   } from '$lib/stores';
   import type { Node, Edge } from '$lib/stores';
   import { NODE_TYPES, type NodeType } from '$lib/nodeTypes';
-  import { newGraph, saveGraph, loadGraph, basename } from '$lib/graphActions';
+  import { newGraph, saveGraph, loadGraph, loadDemo, basename } from '$lib/graphActions';
   import FilterPanel from './FilterPanel.svelte';
   import ProvenancePanel from './ProvenancePanel.svelte';
   import TagManager from './TagManager.svelte';
@@ -437,6 +437,13 @@
             </svg>
           {/if}
           {busy.load ? 'Loading…' : 'Open Graph'}
+        </button>
+
+        <button class="btn btn-ghost btn-full" onclick={loadDemo} title="Load a built-in example investigation graph">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M9 3h6"/><path d="M10 3v6.5L4.5 19a2 2 0 0 0 1.7 3h11.6a2 2 0 0 0 1.7-3L14 9.5V3"/>
+          </svg>
+          Demo Graph
         </button>
 
         <button class="btn btn-danger btn-full" onclick={handleNewGraph}>
