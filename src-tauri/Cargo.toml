@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Backend for Link Mage OSINT tool"
 authors = ["Link Mage Contributors"]
 license = "MIT"
-repository = "https://github.com/your-username/link-mage"
+repository = "https://github.com/pallab-js/link-mage"
 edition = "2021"
 rust-version = "1.77.2"
 

@@ -235,8 +235,12 @@ impl Transform for RemoteTransform {
     fn run(&self, seed: &Node) -> Result<(Vec<Node>, Vec<Edge>), String> {
         info!("[RemoteTransform] Calling '{}' for '{}'", self.url, seed.id);
 
+        guard_outbound_url(&self.url)?;
+
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(30))
+            // Prevent redirect-based SSRF bypass of the pre-request guard.
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| format!("failed to build HTTP client: {e}"))?;
 
@@ -266,9 +270,11 @@ impl Transform for RemoteTransform {
             error: Option<String>,
         }
 
-        let body: RemoteResponse = response
-            .json()
-            .map_err(|e| format!("failed to parse JSON response: {e}"))?;
+        let body: RemoteResponse = {
+            let text = read_body_capped(response)?;
+            serde_json::from_str(&text)
+                .map_err(|e| format!("failed to parse JSON response: {e}"))?
+        };
 
         if let Some(err) = body.error {
             return Err(err);
@@ -861,12 +867,211 @@ fn is_private_ip(ip: std::net::IpAddr) -> bool {
     }
 }
 
+// ── SSRF protection ─────────────────────────────────────────────────────────
+//
+// Outbound HTTP transforms (scrape, remote) must never be coerced into
+// reaching internal infrastructure. A node value such as
+// `http://169.254.169.254/…` (cloud metadata) or `http://127.0.0.1/…`
+// (loopback) could otherwise exfiltrate internal data into the graph.
+//
+// We defend in two layers:
+//   1. Scheme allow-list (http / https only — blocks file://, gopher://, …).
+//   2. Resolve the host and reject any address that maps to a loopback,
+//      private, link-local, or otherwise non-global range *before* the
+//      request is made.
+
+/// Maximum number of bytes read from any outbound HTTP response body.
+/// Caps memory use and protects against decompression / infinite-stream abuse.
+pub(crate) const MAX_RESPONSE_BYTES: u64 = 10 * 1024 * 1024; // 10 MiB
+
+/// Returns true if `ip` must never be contacted by an outbound transform.
+///
+/// Covers loopback, private (RFC-1918 / RFC-4193), link-local, the IPv4
+/// "this host" (`0.0.0.0/8`), the cloud-metadata address (`169.254.169.254`,
+/// already inside link-local), unspecified, and IPv6 unique-local / loopback.
+pub(crate) fn is_blocked_ip(ip: std::net::IpAddr) -> bool {
+    if ip.is_loopback() || ip.is_unspecified() || is_private_ip(ip) {
+        return true;
+    }
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let octets = v4.octets();
+            // 0.0.0.0/8 "this host on this network"
+            octets[0] == 0
+            // 100.64.0.0/10 CGNAT
+            || (octets[0] == 100 && (octets[1] & 0xc0) == 64)
+            // 169.254.0.0/16 link-local (incl. 169.254.169.254 metadata)
+            || (octets[0] == 169 && octets[1] == 254)
+        }
+        std::net::IpAddr::V6(v6) => {
+            // fe80::/10 link-local
+            (v6.segments()[0] & 0xffc0) == 0xfe80
+        }
+    }
+}
+
+/// Validate a URL before an outbound request, returning the sanitized URL
+/// string on success.
+///
+/// * Enforces an `http` / `https` scheme.
+/// * Extracts the host and resolves it (via the system resolver) to one or
+///   more IPs; the request is rejected if **any** resolved address is in a
+///   blocked range. (Rejecting on any match avoids DNS-rebinding style
+///   partial exposure.)
+pub(crate) fn guard_outbound_url(url: &str) -> Result<(), String> {
+    let lower = url.trim().to_ascii_lowercase();
+    let rest = if let Some(r) = lower.strip_prefix("http://") {
+        r
+    } else if let Some(r) = lower.strip_prefix("https://") {
+        r
+    } else {
+        return Err(format!(
+            "blocked URL '{url}': only http:// and https:// schemes are allowed"
+        ));
+    };
+
+    // Extract the authority (host[:port]) — up to the first '/', '?' or '#'.
+    let authority = rest
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .trim_end_matches('.');
+    // Strip userinfo if present (user:pass@host).
+    let host_port = authority.rsplit('@').next().unwrap_or(authority);
+
+    // Split host and optional port, handling bracketed IPv6 literals.
+    let host = if let Some(stripped) = host_port.strip_prefix('[') {
+        // [::1]:8080 → ::1
+        stripped.split(']').next().unwrap_or("").to_string()
+    } else {
+        host_port.split(':').next().unwrap_or("").to_string()
+    };
+
+    if host.is_empty() {
+        return Err(format!("blocked URL '{url}': missing host"));
+    }
+
+    // If the host is already an IP literal, check it directly.
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        if is_blocked_ip(ip) {
+            return Err(format!(
+                "blocked URL '{url}': resolves to non-routable address {ip}"
+            ));
+        }
+        return Ok(());
+    }
+
+    // Otherwise resolve via the system resolver. Port is a placeholder.
+    use std::net::ToSocketAddrs;
+    let addrs = (host.as_str(), 0u16)
+        .to_socket_addrs()
+        .map_err(|e| format!("blocked URL '{url}': host resolution failed: {e}"))?;
+
+    let mut saw_any = false;
+    for sock in addrs {
+        saw_any = true;
+        if is_blocked_ip(sock.ip()) {
+            return Err(format!(
+                "blocked URL '{url}': host resolves to non-routable address {}",
+                sock.ip()
+            ));
+        }
+    }
+
+    if !saw_any {
+        return Err(format!("blocked URL '{url}': host did not resolve"));
+    }
+
+    Ok(())
+}
+
+/// Read an HTTP response body with a hard byte cap.
+fn read_body_capped(resp: reqwest::blocking::Response) -> Result<String, String> {
+    use std::io::Read;
+    let mut limited = resp.take(MAX_RESPONSE_BYTES);
+    let mut buf = Vec::new();
+    limited
+        .read_to_end(&mut buf)
+        .map_err(|e| format!("Failed to read response body: {e}"))?;
+    Ok(String::from_utf8_lossy(&buf).into_owned())
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::graph::Node;
+    use std::net::IpAddr;
+
+    // ── SSRF guard ──────────────────────────────────────────────────────────
+
+    fn ip(s: &str) -> IpAddr {
+        s.parse().unwrap()
+    }
+
+    #[test]
+    fn blocked_ip_rejects_loopback_private_linklocal_metadata() {
+        // loopback
+        assert!(is_blocked_ip(ip("127.0.0.1")));
+        assert!(is_blocked_ip(ip("::1")));
+        // unspecified / this-host
+        assert!(is_blocked_ip(ip("0.0.0.0")));
+        // RFC-1918 private
+        assert!(is_blocked_ip(ip("10.0.0.1")));
+        assert!(is_blocked_ip(ip("172.16.5.4")));
+        assert!(is_blocked_ip(ip("192.168.1.1")));
+        // link-local + cloud metadata
+        assert!(is_blocked_ip(ip("169.254.1.1")));
+        assert!(is_blocked_ip(ip("169.254.169.254")));
+        // CGNAT
+        assert!(is_blocked_ip(ip("100.64.0.1")));
+        // IPv6 ULA + link-local
+        assert!(is_blocked_ip(ip("fc00::1")));
+        assert!(is_blocked_ip(ip("fe80::1")));
+    }
+
+    #[test]
+    fn blocked_ip_allows_public_addresses() {
+        assert!(!is_blocked_ip(ip("8.8.8.8")));
+        assert!(!is_blocked_ip(ip("93.184.216.34"))); // example.com
+        assert!(!is_blocked_ip(ip("1.1.1.1")));
+        assert!(!is_blocked_ip(ip("2606:4700:4700::1111"))); // cloudflare v6
+                                                             // 172.x outside the 172.16.0.0/12 block is public
+        assert!(!is_blocked_ip(ip("172.32.0.1")));
+        assert!(!is_blocked_ip(ip("172.15.0.1")));
+    }
+
+    #[test]
+    fn guard_rejects_non_http_schemes() {
+        assert!(guard_outbound_url("file:///etc/passwd").is_err());
+        assert!(guard_outbound_url("gopher://evil/").is_err());
+        assert!(guard_outbound_url("ftp://host/").is_err());
+        assert!(guard_outbound_url(" nohttp.com").is_err());
+    }
+
+    #[test]
+    fn guard_rejects_ip_literals_in_blocked_ranges() {
+        assert!(guard_outbound_url("http://127.0.0.1/").is_err());
+        assert!(guard_outbound_url("http://169.254.169.254/latest/meta-data/").is_err());
+        assert!(guard_outbound_url("http://10.0.0.5:8080/x").is_err());
+        assert!(guard_outbound_url("https://192.168.0.1/").is_err());
+        assert!(guard_outbound_url("http://[::1]:9000/").is_err());
+        // userinfo must not smuggle a public host past an internal target
+        assert!(guard_outbound_url("http://public.example.com@127.0.0.1/").is_err());
+    }
+
+    #[test]
+    fn guard_allows_public_ip_literals() {
+        assert!(guard_outbound_url("http://8.8.8.8/").is_ok());
+        assert!(guard_outbound_url("https://1.1.1.1/path?q=1").is_ok());
+    }
+
+    #[test]
+    fn guard_rejects_missing_host() {
+        assert!(guard_outbound_url("http:///path").is_err());
+        assert!(guard_outbound_url("https://").is_err());
+    }
 
     // ── Registry ──────────────────────────────────────────────────────────
 
@@ -1463,6 +1668,9 @@ impl ScrapeWebpageTransform {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(10))
             .user_agent(concat!("link-mage-scraper/", env!("CARGO_PKG_VERSION")))
+            // Do not auto-follow redirects: a public URL could 3xx-redirect to
+            // an internal address, bypassing the pre-request SSRF guard.
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("failed to build reqwest blocking client - this should only happen if the system TLS configuration is broken");
         Self { client }
@@ -1509,6 +1717,8 @@ impl Transform for ScrapeWebpageTransform {
 
         info!("[Scrape] Fetching '{}'", url);
 
+        guard_outbound_url(&url)?;
+
         let resp = self
             .client
             .get(&url)
@@ -1519,9 +1729,7 @@ impl Transform for ScrapeWebpageTransform {
             return Err(format!("HTTP request failed with status {}", resp.status()));
         }
 
-        let body = resp
-            .text()
-            .map_err(|e| format!("Failed to read response body: {}", e))?;
+        let body = read_body_capped(resp)?;
 
         let document = scraper::Html::parse_document(&body);
         let title_selector = scraper::Selector::parse("title").unwrap();
